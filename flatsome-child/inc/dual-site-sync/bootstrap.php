@@ -1,0 +1,101 @@
+<?php
+/**
+ * Dual Site Sync - Bootstrap
+ *
+ * همگام‌سازی دستی محصولات ووکامرس بین دو فروشگاه.
+ * این فایل تنها نقطه‌ی ورود است؛ از functions.php چایلد تم فراخوانی می‌شود:
+ *
+ *     require_once get_stylesheet_directory() . '/inc/dual-site-sync/bootstrap.php';
+ *
+ * تنظیمات اتصال در wp-config.php تعریف می‌شوند. نمونه را در
+ * docs/wp-config-snippet.php ببینید.
+ *
+ * @package DualSiteSync
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+define( 'DSS_VERSION', '2.0.0' );
+define( 'DSS_PATH', trailingslashit( __DIR__ ) );
+define( 'DSS_URL', trailingslashit( get_stylesheet_directory_uri() . '/inc/dual-site-sync' ) );
+define( 'DSS_TEXTDOMAIN', 'dual-site-sync' );
+
+/**
+ * فایل‌های کلاس‌ها.
+ */
+foreach ( array(
+	'class-dss-logger.php',
+	'class-dss-config.php',
+	'class-dss-context.php',
+	'class-dss-settings.php',
+	'class-dss-media.php',
+	'class-dss-swatches.php',
+	'class-dss-exporter.php',
+	'class-dss-importer.php',
+	'class-dss-client.php',
+	'class-dss-rest.php',
+	'class-dss-ajax.php',
+	'class-dss-metabox.php',
+	'class-dss-search.php',
+	'class-dss-stock.php',
+	'class-dss-variation-sku.php',
+) as $dss_file ) {
+	require_once DSS_PATH . 'includes/' . $dss_file;
+}
+unset( $dss_file );
+
+/**
+ * راه‌اندازی پس از بارگذاری همه‌ی افزونه‌ها، تا مطمئن شویم ووکامرس در دسترس است.
+ */
+add_action(
+	'plugins_loaded',
+	function () {
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			add_action( 'admin_notices', 'dss_notice_missing_woocommerce' );
+
+			return;
+		}
+
+		DSS_Settings::instance();
+		DSS_Metabox::instance();
+		DSS_Ajax::instance();
+		DSS_Rest::instance();
+		DSS_Search::instance();
+		DSS_Stock::instance();
+		DSS_Variation_Sku::instance();
+
+		do_action( 'dss_loaded' );
+	},
+	20
+);
+
+/**
+ * هشدار نبود ووکامرس.
+ */
+function dss_notice_missing_woocommerce() {
+	echo '<div class="notice notice-error"><p><strong>Dual Site Sync:</strong> ووکامرس فعال نیست؛ همگام‌سازی غیرفعال شد.</p></div>';
+}
+
+/**
+ * هشدار پیکربندی ناقص در wp-config.php.
+ */
+add_action(
+	'admin_notices',
+	function () {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			return;
+		}
+
+		$errors = DSS_Config::configuration_errors();
+
+		if ( empty( $errors ) ) {
+			return;
+		}
+
+		echo '<div class="notice notice-error"><p><strong>Dual Site Sync — پیکربندی ناقص است:</strong></p><ul style="list-style:disc;margin-right:20px;">';
+		foreach ( $errors as $error ) {
+			echo '<li>' . esc_html( $error ) . '</li>';
+		}
+		echo '</ul><p>نمونه‌ی تنظیمات <code>wp-config.php</code> را در فایل <code>docs/wp-config-snippet.php</code> ببینید.</p></div>';
+	}
+);

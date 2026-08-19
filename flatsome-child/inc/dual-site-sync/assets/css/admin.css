@@ -1,0 +1,90 @@
+/* Dual Site Sync — استایل پنل مدیریت */
+
+.dss-panel {
+	font-size: 13px;
+	line-height: 1.7;
+}
+
+.dss-box {
+	padding: 10px 12px;
+	border-radius: 4px;
+	margin-bottom: 12px;
+	border-right: 4px solid #c3c4c7;
+	background: #f6f7f7;
+}
+
+.dss-box--ok      { border-right-color: #00a32a; background: #f0f8f1; }
+.dss-box--error   { border-right-color: #d63638; background: #fcf0f1; }
+.dss-box--neutral { border-right-color: #dba617; background: #fcf9e8; }
+
+.dss-box ul { margin: 6px 0 0; padding-right: 18px; list-style: disc; }
+
+.dss-box .dashicons { vertical-align: text-bottom; }
+
+.dss-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+.dss-actions .button { width: 100%; text-align: center; }
+
+.dss-btn--create { border-color: #2271b1; color: #2271b1; }
+
+.dss-btn.is-busy { opacity: .6; pointer-events: none; }
+
+.dss-status {
+	min-height: 20px;
+	padding: 0 2px;
+	word-break: break-word;
+}
+
+.dss-status--busy    { color: #2271b1; }
+.dss-status--success { color: #00734c; }
+.dss-status--error   { color: #d63638; }
+
+.dss-hint  { color: #646970; font-size: 12px; margin-top: 4px; }
+.dss-muted { color: #646970; }
+.dss-good  { color: #00734c; font-weight: 600; }
+.dss-bad   { color: #d63638; font-weight: 600; }
+
+.dss-legend {
+	margin: 10px 0;
+	font-size: 12px;
+	color: #50575e;
+}
+
+.dss-legend summary { cursor: pointer; }
+.dss-legend ul { margin: 8px 0 0; padding-right: 18px; list-style: disc; }
+
+.dss-crosslink {
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px solid #dcdcde;
+	text-align: center;
+}
+
+.dss-crosslink .button { width: 100%; }
+
+/* صفحه‌ی تنظیمات */
+
+.dss-settings .dss-status-table th { width: 200px; }
+.dss-settings .dss-status-table td,
+.dss-settings .dss-status-table th { padding: 10px 12px; }
+
+.dss-inline-status { margin-right: 10px; }
+
+.dss-log td { vertical-align: top; }
+.dss-log .dss-context {
+	display: block;
+	margin-top: 4px;
+	font-size: 11px;
+	color: #646970;
+	background: transparent;
+	padding: 0;
+}
+
+.dss-log--error   td:nth-child(2) { color: #d63638; font-weight: 600; }
+.dss-log--warning td:nth-child(2) { color: #bd8600; font-weight: 600; }
+.dss-log--success td:nth-child(2) { color: #00734c; font-weight: 600; }

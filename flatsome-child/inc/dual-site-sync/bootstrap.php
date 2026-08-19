@@ -45,29 +45,51 @@ foreach ( array(
 unset( $dss_file );
 
 /**
- * راه‌اندازی پس از بارگذاری همه‌ی افزونه‌ها، تا مطمئن شویم ووکامرس در دسترس است.
+ * راه‌اندازی ماژول‌ها.
  */
-add_action(
-	'plugins_loaded',
-	function () {
-		if ( ! class_exists( 'WooCommerce' ) ) {
-			add_action( 'admin_notices', 'dss_notice_missing_woocommerce' );
+function dss_init_modules() {
+	static $done = false;
 
-			return;
-		}
+	if ( $done ) {
+		return;
+	}
 
-		DSS_Settings::instance();
-		DSS_Metabox::instance();
-		DSS_Ajax::instance();
-		DSS_Rest::instance();
-		DSS_Search::instance();
-		DSS_Stock::instance();
-		DSS_Variation_Sku::instance();
+	$done = true;
 
-		do_action( 'dss_loaded' );
-	},
-	20
-);
+	if ( ! class_exists( 'WooCommerce' ) ) {
+		add_action( 'admin_notices', 'dss_notice_missing_woocommerce' );
+
+		return;
+	}
+
+	DSS_Settings::instance();
+	DSS_Metabox::instance();
+	DSS_Ajax::instance();
+	DSS_Rest::instance();
+	DSS_Search::instance();
+	DSS_Stock::instance();
+	DSS_Variation_Sku::instance();
+
+	do_action( 'dss_loaded' );
+}
+
+/*
+ * انتخاب قلاب راه‌اندازی بر اساس اینکه این فایل از کجا لود شده است.
+ *
+ * وردپرس در wp-settings.php ابتدا افزونه‌ها را لود و plugins_loaded را شلیک
+ * می‌کند، و *بعد* functions.php پوسته را include می‌کند. پس وقتی این فایل از
+ * چایلد تم فراخوانی می‌شود، plugins_loaded از قبل اجرا شده و بستن به آن یعنی
+ * ماژول هرگز راه نمی‌افتد. در آن حالت after_setup_theme درست‌ترین قلاب است که
+ * بلافاصله پس از بارگذاری پوسته اجرا می‌شود و ووکامرس هم تا آن لحظه آماده است.
+ *
+ * اگر روزی همین فایل از یک افزونه (یا mu-plugin) لود شد، شاخه‌ی دوم اجرا
+ * می‌شود و رفتار قبلی حفظ می‌ماند.
+ */
+if ( did_action( 'plugins_loaded' ) ) {
+	add_action( 'after_setup_theme', 'dss_init_modules', 20 );
+} else {
+	add_action( 'plugins_loaded', 'dss_init_modules', 20 );
+}
 
 /**
  * هشدار نبود ووکامرس.

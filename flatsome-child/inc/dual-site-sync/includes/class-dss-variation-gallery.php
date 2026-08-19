@@ -33,6 +33,21 @@ class DSS_Variation_Gallery {
 	 * @return array<string,array>
 	 */
 	public static function definitions() {
+		/*
+		 * افزودن کلید سفارشی بدون دست زدن به این فایل — در functions.php:
+		 *
+		 *   add_filter( 'dss_variation_gallery_definitions', function ( $defs ) {
+		 *       $defs['my_plugin_images'] = array(
+		 *           'format'  => 'array',   // یا 'csv'
+		 *           'classes' => array(),
+		 *           'plugins' => array(),
+		 *       );
+		 *       return $defs;
+		 *   } );
+		 *
+		 * کلیدی که در دیتابیس ردیف داشته باشد، حتی بدون classes/plugins هم
+		 * خودکار فعال شمرده می‌شود.
+		 */
 		return apply_filters(
 			'dss_variation_gallery_definitions',
 			array(
@@ -61,6 +76,31 @@ class DSS_Variation_Gallery {
 	}
 
 	/**
+	 * تکمیل کلیدهای جاافتاده در تعریف‌هایی که از فیلتر می‌آیند.
+	 *
+	 * @param array $definitions تعریف‌ها.
+	 *
+	 * @return array
+	 */
+	private static function normalize( array $definitions ) {
+		$out = array();
+
+		foreach ( $definitions as $key => $definition ) {
+			if ( ! is_array( $definition ) ) {
+				continue;
+			}
+
+			$out[ $key ] = array(
+				'format'  => isset( $definition['format'] ) && 'array' === $definition['format'] ? 'array' : 'csv',
+				'classes' => isset( $definition['classes'] ) ? (array) $definition['classes'] : array(),
+				'plugins' => isset( $definition['plugins'] ) ? (array) $definition['plugins'] : array(),
+			);
+		}
+
+		return $out;
+	}
+
+	/**
 	 * نگاشت ساده‌ی کلید → فرمت (برای سازگاری و استفاده‌ی داخلی).
 	 *
 	 * @return array<string,string>
@@ -68,7 +108,7 @@ class DSS_Variation_Gallery {
 	public static function meta_keys() {
 		$out = array();
 
-		foreach ( self::definitions() as $key => $definition ) {
+		foreach ( self::normalize( self::definitions() ) as $key => $definition ) {
 			$out[ $key ] = $definition['format'];
 		}
 
@@ -103,7 +143,7 @@ class DSS_Variation_Gallery {
 		}
 
 		$active      = array();
-		$definitions = self::definitions();
+		$definitions = self::normalize( self::definitions() );
 		$in_db       = self::keys_present_in_db( array_keys( $definitions ) );
 
 		foreach ( $definitions as $key => $definition ) {

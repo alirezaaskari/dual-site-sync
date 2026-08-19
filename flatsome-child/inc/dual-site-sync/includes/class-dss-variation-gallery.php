@@ -9,9 +9,10 @@
  * چون شناسه‌ی پیوست در دو سایت یکسان نیست، مثل بقیه‌ی تصاویر باید به URL
  * ترجمه و در مقصد دوباره به شناسه‌ی محلی برگردانده شود.
  *
- * تشخیص افزونه خودکار است: هر کلید متایی که روی واریشن *وجود داشته باشد*
- * (حتی خالی) منتقل می‌شود. کلیدی که وجود ندارد اصلاً در بسته نمی‌آید و در
- * مقصد دست‌نخورده می‌ماند.
+ * تشخیص در سطح *سایت* انجام می‌شود، نه در سطح واریشن: اگر افزونه روی سایت
+ * مبدأ فعال باشد، کلید برای هر واریشن فرستاده می‌شود — حتی اگر آن واریشن
+ * تصویر اضافی نداشته باشد. فهرست خالی در مقصد باعث پاک شدن می‌شود، و همین
+ * چیزی است که دو سایت را واقعاً یکسان نگه می‌دارد.
  *
  * @package DualSiteSync
  */
@@ -20,43 +21,186 @@ defined( 'ABSPATH' ) || exit;
 
 class DSS_Variation_Gallery {
 
+	const CACHE_KEY = 'dss_variation_gallery_active_keys';
+
 	/**
-	 * کلیدهای شناخته‌شده و شکل ذخیره‌سازی‌شان.
+	 * کلیدهای شناخته‌شده، شکل ذخیره‌سازی، و نشانه‌های فعال بودن افزونه.
 	 *
-	 * csv   → رشته‌ی شناسه‌ها با کاما
-	 * array → آرایه‌ی شناسه‌ها
+	 * format  → csv (رشته‌ی جداشده با کاما) یا array
+	 * classes → کلاس‌هایی که وجودشان یعنی افزونه فعال است
+	 * plugins → پوشه‌ی افزونه در فهرست افزونه‌های فعال
 	 *
-	 * @return array<string,string>
+	 * @return array<string,array>
 	 */
-	public static function meta_keys() {
+	public static function definitions() {
 		return apply_filters(
-			'dss_variation_gallery_meta_keys',
+			'dss_variation_gallery_definitions',
 			array(
-				'_wc_additional_variation_images' => 'csv',   // WooCommerce Additional Variation Images
-				'additional_variation_images'     => 'csv',   // نسخه‌های قدیمی همان افزونه
-				'rtwpvg_images'                   => 'array', // RadiusTheme Variation Images Gallery
-				'woo_variation_gallery_images'    => 'array', // Variation Images Gallery (GetWooPlugins)
+				'_wc_additional_variation_images' => array(
+					'format'  => 'csv',
+					'classes' => array( 'WC_Additional_Variation_Images' ),
+					'plugins' => array( 'woocommerce-additional-variation-images' ),
+				),
+				'additional_variation_images'     => array(
+					'format'  => 'csv',
+					'classes' => array(),
+					'plugins' => array(),
+				),
+				'rtwpvg_images'                   => array(
+					'format'  => 'array',
+					'classes' => array( 'RTWPVG', 'RTWPVG\\Helper' ),
+					'plugins' => array( 'woo-product-variation-gallery', 'woo-product-variation-gallery-pro' ),
+				),
+				'woo_variation_gallery_images'    => array(
+					'format'  => 'array',
+					'classes' => array( 'Woo_Variation_Gallery' ),
+					'plugins' => array( 'woo-variation-gallery' ),
+				),
 			)
 		);
 	}
 
 	/**
+	 * نگاشت ساده‌ی کلید → فرمت (برای سازگاری و استفاده‌ی داخلی).
+	 *
+	 * @return array<string,string>
+	 */
+	public static function meta_keys() {
+		$out = array();
+
+		foreach ( self::definitions() as $key => $definition ) {
+			$out[ $key ] = $definition['format'];
+		}
+
+		return $out;
+	}
+
+	/**
+	 * کلیدهایی که روی *این سایت* واقعاً در جریان‌اند.
+	 *
+	 * یک کلید فعال شمرده می‌شود اگر افزونه‌اش شناسایی شود (کلاس یا فهرست
+	 * افزونه‌های فعال)، یا اگر دست‌کم یک ردیف متا با آن کلید در دیتابیس باشد.
+	 *
+	 * @param bool $fresh نادیده گرفتن کش.
+	 *
+	 * @return array<string,string> کلید => فرمت
+	 */
+	public static function active_keys( $fresh = false ) {
+		static $runtime = null;
+
+		if ( ! $fresh && null !== $runtime ) {
+			return $runtime;
+		}
+
+		if ( ! $fresh ) {
+			$cached = get_transient( self::CACHE_KEY );
+
+			if ( is_array( $cached ) ) {
+				$runtime = $cached;
+
+				return $runtime;
+			}
+		}
+
+		$active      = array();
+		$definitions = self::definitions();
+		$in_db       = self::keys_present_in_db( array_keys( $definitions ) );
+
+		foreach ( $definitions as $key => $definition ) {
+			if ( in_array( $key, $in_db, true ) || self::plugin_detected( $definition ) ) {
+				$active[ $key ] = $definition['format'];
+			}
+		}
+
+		set_transient( self::CACHE_KEY, $active, HOUR_IN_SECONDS );
+
+		$runtime = $active;
+
+		return $runtime;
+	}
+
+	/**
+	 * پاک کردن کش تشخیص.
+	 */
+	public static function flush_cache() {
+		delete_transient( self::CACHE_KEY );
+	}
+
+	/**
+	 * آیا افزونه‌ی مربوط به این کلید شناسایی می‌شود؟
+	 *
+	 * @param array $definition تعریف کلید.
+	 *
+	 * @return bool
+	 */
+	private static function plugin_detected( array $definition ) {
+		foreach ( $definition['classes'] as $class ) {
+			if ( class_exists( $class ) ) {
+				return true;
+			}
+		}
+
+		if ( empty( $definition['plugins'] ) ) {
+			return false;
+		}
+
+		$active_plugins = (array) get_option( 'active_plugins', array() );
+
+		if ( is_multisite() ) {
+			$active_plugins = array_merge( $active_plugins, array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) ) );
+		}
+
+		foreach ( $active_plugins as $plugin_file ) {
+			$folder = strtok( (string) $plugin_file, '/' );
+
+			if ( in_array( $folder, $definition['plugins'], true ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * کدام‌یک از کلیدها دست‌کم یک ردیف در جدول متا دارند.
+	 *
+	 * @param string[] $keys کلیدها.
+	 *
+	 * @return string[]
+	 */
+	private static function keys_present_in_db( array $keys ) {
+		global $wpdb;
+
+		if ( empty( $keys ) ) {
+			return array();
+		}
+
+		$placeholders = implode( ',', array_fill( 0, count( $keys ), '%s' ) );
+
+		$found = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT meta_key FROM {$wpdb->postmeta} WHERE meta_key IN ({$placeholders})", // phpcs:ignore WordPress.DB.PreparedSQL
+				$keys
+			)
+		);
+
+		return is_array( $found ) ? $found : array();
+	}
+
+	/**
 	 * خروجی گرفتن از یک واریشن.
+	 *
+	 * برای هر کلید فعال روی این سایت یک ورودی تولید می‌شود؛ آرایه‌ی خالی یعنی
+	 * این واریشن تصویر اضافی ندارد و مقصد هم باید خالی شود.
 	 *
 	 * @param int $variation_id شناسه واریشن.
 	 *
-	 * @return array<string,string[]> کلید متا => فهرست آدرس‌ها. آرایه‌ی خالی
-	 *                                یعنی افزونه فعال است ولی تصویری ثبت نشده.
+	 * @return array<string,string[]>
 	 */
 	public static function export( $variation_id ) {
 		$out = array();
 
-		foreach ( self::meta_keys() as $meta_key => $format ) {
-			// اگر ردیف متا اصلاً وجود ندارد، آن افزونه روی این سایت در کار نیست.
-			if ( ! metadata_exists( 'post', $variation_id, $meta_key ) ) {
-				continue;
-			}
-
+		foreach ( self::active_keys() as $meta_key => $format ) {
 			$ids  = self::parse( get_post_meta( $variation_id, $meta_key, true ), $format );
 			$urls = array();
 
@@ -99,13 +243,16 @@ class DSS_Variation_Gallery {
 			$ids = DSS_Media::resolve_many( $urls, $parent_id );
 
 			/*
-			 * فهرست خالی یعنی واریشن مبدأ هم تصویر اضافی نداشته — پس در مقصد
-			 * هم پاک می‌شود. همین رفتار است که تصاویر اضافیِ اشتباهاً پرشده را
-			 * در همگام‌سازی بعدی تمیز می‌کند.
+			 * فهرست خالی یعنی واریشن مبدأ تصویر اضافی ندارد؛ پس مقصد هم پاک
+			 * می‌شود. همین رفتار است که تصاویر اضافیِ اشتباهاً پرشده را در
+			 * همگام‌سازی بعدی تمیز می‌کند.
 			 */
 			if ( empty( $ids ) ) {
-				delete_post_meta( $variation_id, $meta_key );
-				$changed = true;
+				if ( metadata_exists( 'post', $variation_id, $meta_key ) ) {
+					delete_post_meta( $variation_id, $meta_key );
+					$changed = true;
+				}
+
 				continue;
 			}
 
@@ -147,28 +294,11 @@ class DSS_Variation_Gallery {
 	}
 
 	/**
-	 * کلیدهایی که روی این سایت واقعاً استفاده می‌شوند (برای نمایش در تنظیمات).
+	 * کلیدهای شناسایی‌شده، برای نمایش در صفحه‌ی تنظیمات.
 	 *
 	 * @return string[]
 	 */
 	public static function detected_keys() {
-		global $wpdb;
-
-		$keys = array_keys( self::meta_keys() );
-
-		if ( empty( $keys ) ) {
-			return array();
-		}
-
-		$placeholders = implode( ',', array_fill( 0, count( $keys ), '%s' ) );
-
-		$found = $wpdb->get_col(
-			$wpdb->prepare(
-				"SELECT DISTINCT meta_key FROM {$wpdb->postmeta} WHERE meta_key IN ({$placeholders})", // phpcs:ignore WordPress.DB.PreparedSQL
-				$keys
-			)
-		);
-
-		return is_array( $found ) ? $found : array();
+		return array_keys( self::active_keys( true ) );
 	}
 }

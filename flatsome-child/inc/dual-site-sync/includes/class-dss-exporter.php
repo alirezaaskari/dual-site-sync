@@ -153,6 +153,21 @@ class DSS_Exporter {
 			$payload['tags']       = self::export_terms( $product_id, 'product_tag' );
 		}
 
+		// ---- برندها ----
+		if ( 'stock' !== $mode && DSS_Config::is_on( 'sync_brands' ) ) {
+			$brands = array();
+
+			foreach ( self::brand_taxonomies() as $taxonomy ) {
+				$terms = self::export_terms( $product_id, $taxonomy );
+
+				if ( ! empty( $terms ) ) {
+					$brands[ $taxonomy ] = $terms;
+				}
+			}
+
+			$payload['brands'] = $brands;
+		}
+
 		// ---- تصاویر ----
 		if ( $with_images ) {
 			$payload['images'] = array(
@@ -179,6 +194,34 @@ class DSS_Exporter {
 		}
 
 		return apply_filters( 'dss_export_payload', $payload, $product, $mode );
+	}
+
+	/**
+	 * تاکسونومی‌های برند که ممکن است روی سایت فعال باشند.
+	 *
+	 * ووکامرس ۹.۴ به بعد product_brand را به‌صورت داخلی دارد؛ نسخه‌های قدیمی‌تر
+	 * از افزونه‌های جانبی استفاده می‌کنند که هرکدام نام تاکسونومی خودشان را
+	 * دارند. فقط آن‌هایی که واقعاً ثبت شده‌اند منتقل می‌شوند.
+	 *
+	 * @return string[]
+	 */
+	public static function brand_taxonomies() {
+		$candidates = array(
+			'product_brand',       // ووکامرس داخلی و افزونه‌ی WooCommerce Brands
+			'pwb-brand',           // Perfect WooCommerce Brands
+			'yith_product_brand',  // YITH WooCommerce Brands
+			'berocket_brand',      // BeRocket Brands
+		);
+
+		$active = array();
+
+		foreach ( apply_filters( 'dss_brand_taxonomies', $candidates ) as $taxonomy ) {
+			if ( taxonomy_exists( $taxonomy ) ) {
+				$active[] = $taxonomy;
+			}
+		}
+
+		return $active;
 	}
 
 	/**
@@ -366,7 +409,7 @@ class DSS_Exporter {
 				$row['height']      = $variation->get_height();
 			}
 
-			if ( $with_images ) {
+			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) ) {
 				$row['image'] = DSS_Media::url( $variation->get_image_id() );
 			}
 

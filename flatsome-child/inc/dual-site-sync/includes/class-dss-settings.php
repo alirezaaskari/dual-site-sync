@@ -28,15 +28,59 @@ class DSS_Settings {
 		add_action( 'admin_post_dss_clear_log', array( $this, 'clear_log' ) );
 	}
 
+	/**
+	 * دسترسی لازم برای صفحه‌ی تنظیمات.
+	 *
+	 * منوی «تنظیمات» وردپرس خودش با manage_options محافظت می‌شود، پس همین
+	 * دسترسی برای صفحه هم استفاده می‌شود تا زیرمنو همیشه دیده شود.
+	 */
+	const CAPABILITY = 'manage_options';
+
+	/**
+	 * آدرس صفحه‌ی تنظیمات.
+	 *
+	 * @return string
+	 */
+	public static function url() {
+		return add_query_arg( array( 'page' => self::PAGE ), admin_url( 'options-general.php' ) );
+	}
+
 	public function add_menu() {
-		add_submenu_page(
-			'woocommerce',
+		add_options_page(
 			'همگام‌سازی دو سایته',
 			'همگام‌سازی دو سایته',
-			'manage_woocommerce',
+			self::CAPABILITY,
 			self::PAGE,
 			array( $this, 'render' )
 		);
+	}
+
+	/**
+	 * توضیح گزینه‌ی برند، بر اساس تاکسونومی‌های واقعاً ثبت‌شده روی این سایت.
+	 *
+	 * @return string
+	 */
+	private static function brands_description() {
+		$taxonomies = DSS_Exporter::brand_taxonomies();
+
+		if ( empty( $taxonomies ) ) {
+			return 'روی این سایت هیچ تاکسونومی برندی ثبت نشده است؛ این گزینه اثری ندارد.';
+		}
+
+		$labels = array();
+
+		foreach ( $taxonomies as $taxonomy ) {
+			$object   = get_taxonomy( $taxonomy );
+			$labels[] = sprintf(
+				'<code>%s</code>%s',
+				esc_html( $taxonomy ),
+				$object ? ' (' . esc_html( $object->labels->name ) . ')' : ''
+			);
+		}
+
+		return 'تاکسونومی‌های شناسایی‌شده: ' . implode( '، ', $labels )
+			. '. برند فقط زمانی منتقل می‌شود که همان تاکسونومی در سایت مقابل هم ثبت شده باشد؛'
+			. ' یعنی افزونه‌ی برند باید روی هر دو سایت یکسان باشد. برندهای نبود، ساخته می‌شوند.';
 	}
 
 	/**
@@ -51,6 +95,16 @@ class DSS_Settings {
 				'title'  => 'محتوای همگام‌سازی',
 				'fields' => array(
 					'sync_categories'           => array( 'type' => 'checkbox', 'label' => 'دسته‌بندی‌ها و برچسب‌ها منتقل شوند' ),
+					'sync_brands'               => array(
+						'type'  => 'checkbox',
+						'label' => 'برندها منتقل شوند',
+						'desc'  => self::brands_description(),
+					),
+					'sync_variation_images'     => array(
+						'type'  => 'checkbox',
+						'label' => 'تصویر واریشن‌ها منتقل شود',
+						'desc'  => 'اگر واریشنی در سایت مبدأ تصویر نداشته باشد، تصویر واریشن مقصد در هر حال دست‌نخورده می‌ماند — با تصویر شاخص یا گالری محصول پر نمی‌شود.',
+					),
 					'create_missing_categories' => array( 'type' => 'checkbox', 'label' => 'دسته‌بندی‌های نبود در سایت مقصد ساخته شوند', 'desc' => 'اگر خاموش باشد، دسته‌بندی‌هایی که در مقصد وجود ندارند نادیده گرفته می‌شوند.' ),
 					'sync_status'               => array( 'type' => 'checkbox', 'label' => 'وضعیت انتشار (منتشرشده/پیش‌نویس) منتقل شود', 'desc' => 'خاموش نگه داشتن این گزینه امن‌تر است؛ در غیر این صورت پیش‌نویس کردن محصول در یک سایت آن را در سایت دیگر هم از دسترس خارج می‌کند. در حالت «ایجاد محصول» وضعیت همیشه منتقل می‌شود.' ),
 					'delete_missing_variations' => array( 'type' => 'checkbox', 'label' => 'واریشن‌هایی که در مبدأ حذف شده‌اند، در مقصد هم حذف شوند' ),
@@ -119,7 +173,7 @@ class DSS_Settings {
 	 * ذخیره.
 	 */
 	public function save() {
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		if ( ! current_user_can( self::CAPABILITY ) ) {
 			wp_die( 'دسترسی ندارید.' );
 		}
 
@@ -152,7 +206,7 @@ class DSS_Settings {
 
 		DSS_Logger::info( 'تنظیمات ذخیره شد.' );
 
-		wp_safe_redirect( add_query_arg( array( 'page' => self::PAGE, 'saved' => 1 ), admin_url( 'admin.php' ) ) );
+		wp_safe_redirect( add_query_arg( 'saved', 1, self::url() ) );
 		exit;
 	}
 
@@ -160,14 +214,14 @@ class DSS_Settings {
 	 * پاک‌کردن گزارش.
 	 */
 	public function clear_log() {
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		if ( ! current_user_can( self::CAPABILITY ) ) {
 			wp_die( 'دسترسی ندارید.' );
 		}
 
 		check_admin_referer( self::NONCE );
 		DSS_Logger::clear();
 
-		wp_safe_redirect( add_query_arg( array( 'page' => self::PAGE ), admin_url( 'admin.php' ) ) );
+		wp_safe_redirect( self::url() );
 		exit;
 	}
 
@@ -245,6 +299,17 @@ class DSS_Settings {
 								<span class="dss-good">فعال (نسخه رایگان)</span>
 							<?php else : ?>
 								<span class="dss-muted">نصب/فعال نیست</span>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
+						<th>تاکسونومی برند</th>
+						<td>
+							<?php $brand_taxonomies = DSS_Exporter::brand_taxonomies(); ?>
+							<?php if ( empty( $brand_taxonomies ) ) : ?>
+								<span class="dss-muted">ثبت نشده</span>
+							<?php else : ?>
+								<span class="dss-good"><?php echo esc_html( implode( '، ', $brand_taxonomies ) ); ?></span>
 							<?php endif; ?>
 						</td>
 					</tr>

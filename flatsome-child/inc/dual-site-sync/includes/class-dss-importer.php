@@ -290,6 +290,27 @@ class DSS_Importer {
 			}
 		}
 
+		// ---- برندها ----
+		if ( isset( $payload['brands'] ) && is_array( $payload['brands'] ) && DSS_Config::is_on( 'sync_brands' ) ) {
+			$brands_applied = false;
+
+			foreach ( $payload['brands'] as $taxonomy => $terms ) {
+				if ( ! is_array( $terms ) || ! taxonomy_exists( $taxonomy ) ) {
+					// تاکسونومی برند در این سایت ثبت نشده؛ ساختنش کار DSS نیست.
+					DSS_Logger::warning( 'تاکسونومی برند در سایت مقصد وجود ندارد؛ رد شد.', array( 'taxonomy' => $taxonomy ) );
+					continue;
+				}
+
+				if ( self::apply_terms( $product_id, $taxonomy, $terms ) ) {
+					$brands_applied = true;
+				}
+			}
+
+			if ( $brands_applied ) {
+				$sections[] = 'برندها';
+			}
+		}
+
 		// ---- تصاویر ----
 		if ( $with_images && isset( $payload['images'] ) && is_array( $payload['images'] ) ) {
 			if ( self::apply_images( $product_id, $payload['images'] ) ) {
@@ -675,7 +696,13 @@ class DSS_Importer {
 				}
 			}
 
-			if ( $with_images && ! empty( $var_data['image'] ) ) {
+			/*
+			 * تصویر واریشن فقط وقتی نوشته می‌شود که مبدأ واقعاً تصویری داشته باشد.
+			 * اگر واریشن مبدأ بدون تصویر بود، کلید image اصلاً در بسته نیست و
+			 * تصویر واریشن مقصد دست‌نخورده می‌ماند — هیچ‌وقت با تصویر شاخص یا
+			 * گالری محصول پر نمی‌شود.
+			 */
+			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) && ! empty( $var_data['image'] ) ) {
 				$attachment_id = DSS_Media::resolve( $var_data['image'], $parent_id );
 
 				if ( $attachment_id ) {

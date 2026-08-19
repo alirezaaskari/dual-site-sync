@@ -28,6 +28,8 @@ class DSS_Config {
 			// همگام‌سازی.
 			'sync_status'                => 'no',   // وضعیت انتشار محصول منتقل شود؟
 			'sync_categories'            => 'yes',
+			'sync_brands'                => 'yes',
+			'sync_variation_images'      => 'yes',
 			'create_missing_categories'  => 'yes',
 			'sync_swatches'              => 'yes',
 			'sync_term_meta'             => 'yes',  // متای ترم‌های سواچ (رنگ/تصویر/تولتیپ).

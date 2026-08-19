@@ -150,20 +150,98 @@ function lotus_auto_generate_sku( $post_id, $post, $update ) {
 
 	delete_transient( $lock );
 
-	if ( ! $product->is_type( 'variable' ) ) {
+	/*
+	 * معمولاً محصول تازه‌ساخته هنوز واریشنی ندارد، ولی اگر با درون‌ریزی یا کپی
+	 * ساخته شده باشد ممکن است داشته باشد؛ همان تابع مشترک کار را می‌کند.
+	 */
+	if ( $product->is_type( 'variable' ) ) {
+		lotus_generate_variation_skus( $post_id );
+	}
+}
+add_action( 'save_post_product', 'lotus_auto_generate_sku', 10, 3 );
+
+/**
+ * ‹‹ تغییر ۵ ›› تولید SKU برای واریشن‌های بدون SKU یک محصول متغیر.
+ *
+ * الگو: <SKU والد>-1، <SKU والد>-2، ...
+ *
+ * نسخه‌ی قبلی به هوک «woocommerce_create_product_variation» بسته بود که در
+ * ووکامرس اصلاً وجود ندارد، پس آن تابع هرگز اجرا نمی‌شد. هوک‌های واقعی
+ * این‌ها هستند:
+ *
+ *   woocommerce_process_product_meta_variable   ذخیره‌ی محصول متغیر
+ *   woocommerce_ajax_save_product_variations    دکمه‌ی «ذخیره تغییرات» واریشن‌ها
+ *
+ * هر دو با شناسه‌ی محصول *والد* صدا زده می‌شوند و در آن لحظه همه‌ی واریشن‌ها
+ * موجودند — برخلاف save_post_product هنگام ایجاد که هنوز واریشنی وجود ندارد.
+ *
+ * @param int $product_id شناسه محصول والد.
+ */
+function lotus_generate_variation_skus( $product_id ) {
+	// در طول همگام‌سازی، SKU سایت مبدأ دست‌نخورده می‌ماند.
+	if ( lotus_sku_is_syncing() ) {
 		return;
 	}
 
-	$index = 1;
+	$product = wc_get_product( $product_id );
 
-	foreach ( $product->get_children() as $variation_id ) {
+	if ( ! $product || ! $product->is_type( 'variable' ) ) {
+		return;
+	}
+
+	/*
+	 * context = 'edit' لازم است.
+	 *
+	 * WC_Product_Variation در حالت پیش‌فرض 'view' وقتی واریشن SKU ندارد، SKU
+	 * والد را برمی‌گرداند. با آن حالت هر واریشنِ بدون SKU «دارای SKU» به نظر
+	 * می‌رسید و هیچ‌وقت شماره نمی‌گرفت.
+	 */
+	$parent_sku = (string) $product->get_sku( 'edit' );
+
+	if ( '' === $parent_sku ) {
+		return;
+	}
+
+	$children = $product->get_children();
+
+	if ( empty( $children ) ) {
+		return;
+	}
+
+	$counter = 1;
+	$pending = array();
+
+	foreach ( $children as $variation_id ) {
 		$variation = wc_get_product( $variation_id );
 
-		if ( ! $variation || $variation->get_sku() ) {
+		if ( ! $variation ) {
 			continue;
 		}
 
-		$variation_sku = lotus_free_variation_sku( $new_sku, $index );
+		$current = (string) $variation->get_sku( 'edit' );
+
+		if ( '' !== $current ) {
+			// شمارنده را از روی SKU های موجود جلو ببر تا تکراری ساخته نشود.
+			if ( 0 === strpos( $current, $parent_sku . '-' ) ) {
+				$suffix = substr( $current, strlen( $parent_sku ) + 1 );
+
+				if ( ctype_digit( $suffix ) && (int) $suffix >= $counter ) {
+					$counter = (int) $suffix + 1;
+				}
+			}
+
+			continue;
+		}
+
+		$pending[] = $variation;
+	}
+
+	if ( empty( $pending ) ) {
+		return;
+	}
+
+	foreach ( $pending as $variation ) {
+		$variation_sku = lotus_free_variation_sku( $parent_sku, $counter );
 
 		if ( '' === $variation_sku ) {
 			continue;
@@ -176,56 +254,18 @@ function lotus_auto_generate_sku( $post_id, $post, $update ) {
 			continue;
 		}
 
-		$index++;
+		$counter++;
 	}
 
 	// بازه‌ی قیمت و وضعیت موجودی والد پس از تغییر واریشن‌ها تازه‌سازی شود.
 	if ( class_exists( 'WC_Product_Variable' ) ) {
-		WC_Product_Variable::sync( $post_id );
+		WC_Product_Variable::sync( $product_id );
 	}
+
+	wc_delete_product_transients( $product_id );
 }
-add_action( 'save_post_product', 'lotus_auto_generate_sku', 10, 3 );
-
-// تولید SKU جداگانه برای ورییشن‌های جدید
-function lotus_generate_variation_sku_individually( $variation_id, $i = 1 ) {
-	// ‹‹ تغییر ۱ ››
-	if ( lotus_sku_is_syncing() ) {
-		return;
-	}
-
-	$variation = wc_get_product( $variation_id );
-
-	if ( ! $variation ) {
-		return;
-	}
-
-	// اگر SKU دارد، تغییر نده
-	if ( $variation->get_sku() ) {
-		return;
-	}
-
-	$parent_id = wp_get_post_parent_id( $variation_id );
-	$parent    = $parent_id ? wc_get_product( $parent_id ) : null;
-
-	if ( ! $parent || ! $parent->get_sku() ) {
-		return;
-	}
-
-	$index         = 1;
-	$variation_sku = lotus_free_variation_sku( $parent->get_sku(), $index );
-
-	if ( '' === $variation_sku ) {
-		return;
-	}
-
-	try {
-		$variation->set_sku( $variation_sku );
-		$variation->save();
-	} catch ( Exception $e ) {
-		return;
-	}
-}
-add_action( 'woocommerce_create_product_variation', 'lotus_generate_variation_sku_individually', 10, 2 );
+add_action( 'woocommerce_process_product_meta_variable', 'lotus_generate_variation_skus', 30, 1 );
+add_action( 'woocommerce_ajax_save_product_variations', 'lotus_generate_variation_skus', 30, 1 );
 
 /**
  * ---------------------------

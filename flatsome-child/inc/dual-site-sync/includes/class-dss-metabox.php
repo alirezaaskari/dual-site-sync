@@ -162,22 +162,44 @@ class DSS_Metabox {
 
 			<?php if ( $target ) : ?>
 				<div class="dss-crosslink">
-					<?php
-					if ( $is_linked ) {
-						$link = $target['url'] . '/?p=' . $remote_id;
-						$note = 'لینک مستقیم به محصول متصل';
-					} elseif ( $sku ) {
-						$link = $target['url'] . '/?post_type=product&s=' . rawurlencode( $sku );
-						$note = 'جست‌وجو با SKU: ' . $sku;
-					} else {
-						$link = $target['url'] . '/shop/';
-						$note = 'صفحه‌ی فروشگاه';
-					}
-					?>
-					<a class="button button-secondary" href="<?php echo esc_url( $link ); ?>" target="_blank" rel="noopener">
-						مشاهده در «<?php echo esc_html( $target_name ); ?>» ↗
-					</a>
-					<div class="dss-hint"><?php echo esc_html( $note ); ?></div>
+					<?php if ( $is_linked ) : ?>
+
+						<a class="button button-secondary dss-link-btn"
+						   href="<?php echo esc_url( $target['url'] . '/?p=' . $remote_id ); ?>"
+						   target="_blank" rel="noopener">
+							<span class="dashicons dashicons-visibility"></span>
+							مشاهده در «<?php echo esc_html( $target_name ); ?>»
+						</a>
+
+						<a class="button button-secondary dss-link-btn dss-link-btn--edit"
+						   href="<?php echo esc_url( $target['url'] . '/wp-admin/post.php?post=' . $remote_id . '&action=edit' ); ?>"
+						   target="_blank" rel="noopener">
+							<span class="dashicons dashicons-edit"></span>
+							ویرایش در «<?php echo esc_html( $target_name ); ?>»
+						</a>
+
+						<div class="dss-hint">محصول متصل، شناسه <?php echo esc_html( $remote_id ); ?></div>
+
+					<?php else : ?>
+
+						<?php
+						if ( $sku ) {
+							$link = $target['url'] . '/wp-admin/edit.php?post_type=product&s=' . rawurlencode( $sku );
+							$note = 'جست‌وجوی SKU «' . $sku . '» در فهرست محصولات سایت مقابل';
+						} else {
+							$link = $target['url'] . '/wp-admin/edit.php?post_type=product';
+							$note = 'فهرست محصولات سایت مقابل';
+						}
+						?>
+						<a class="button button-secondary dss-link-btn"
+						   href="<?php echo esc_url( $link ); ?>" target="_blank" rel="noopener">
+							<span class="dashicons dashicons-search"></span>
+							جست‌وجو در «<?php echo esc_html( $target_name ); ?>»
+						</a>
+
+						<div class="dss-hint"><?php echo esc_html( $note ); ?></div>
+
+					<?php endif; ?>
 				</div>
 			<?php endif; ?>
 

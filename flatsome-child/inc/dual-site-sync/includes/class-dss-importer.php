@@ -290,6 +290,27 @@ class DSS_Importer {
 			}
 		}
 
+		// ---- برندها ----
+		if ( isset( $payload['brands'] ) && is_array( $payload['brands'] ) && DSS_Config::is_on( 'sync_brands' ) ) {
+			$brands_applied = false;
+
+			foreach ( $payload['brands'] as $taxonomy => $terms ) {
+				if ( ! is_array( $terms ) || ! taxonomy_exists( $taxonomy ) ) {
+					// تاکسونومی برند در این سایت ثبت نشده؛ ساختنش کار DSS نیست.
+					DSS_Logger::warning( 'تاکسونومی برند در سایت مقصد وجود ندارد؛ رد شد.', array( 'taxonomy' => $taxonomy ) );
+					continue;
+				}
+
+				if ( self::apply_terms( $product_id, $taxonomy, $terms ) ) {
+					$brands_applied = true;
+				}
+			}
+
+			if ( $brands_applied ) {
+				$sections[] = 'برندها';
+			}
+		}
+
 		// ---- تصاویر ----
 		if ( $with_images && isset( $payload['images'] ) && is_array( $payload['images'] ) ) {
 			if ( self::apply_images( $product_id, $payload['images'] ) ) {
@@ -598,8 +619,9 @@ class DSS_Importer {
 			return 0;
 		}
 
-		$touched  = array();
-		$existing = $parent->get_children();
+		$touched              = array();
+		$existing             = $parent->get_children();
+		$extra_images_touched = false;
 
 		foreach ( $variations_data as $var_data ) {
 			$source_var_id = isset( $var_data['source_variation_id'] ) ? absint( $var_data['source_variation_id'] ) : 0;
@@ -675,7 +697,13 @@ class DSS_Importer {
 				}
 			}
 
-			if ( $with_images && ! empty( $var_data['image'] ) ) {
+			/*
+			 * تصویر واریشن فقط وقتی نوشته می‌شود که مبدأ واقعاً تصویری داشته باشد.
+			 * اگر واریشن مبدأ بدون تصویر بود، کلید image اصلاً در بسته نیست و
+			 * تصویر واریشن مقصد دست‌نخورده می‌ماند — هیچ‌وقت با تصویر شاخص یا
+			 * گالری محصول پر نمی‌شود.
+			 */
+			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) && ! empty( $var_data['image'] ) ) {
 				$attachment_id = DSS_Media::resolve( $var_data['image'], $parent_id );
 
 				if ( $attachment_id ) {
@@ -686,6 +714,13 @@ class DSS_Importer {
 			$variation->save();
 
 			$new_id = $variation->get_id();
+
+			// تصاویر اضافی واریشن.
+			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) && isset( $var_data['extra_images'] ) ) {
+				if ( DSS_Variation_Gallery::import( $new_id, $var_data['extra_images'], $parent_id ) ) {
+					$extra_images_touched = true;
+				}
+			}
 
 			if ( $source_var_id ) {
 				self::link( $new_id, $source_var_id, $source_site );
@@ -712,6 +747,10 @@ class DSS_Importer {
 					DSS_Logger::info( 'واریشن حذف شد (در سایت مبدأ وجود ندارد).', array( 'variation_id' => $old_id ) );
 				}
 			}
+		}
+
+		if ( $extra_images_touched ) {
+			DSS_Logger::info( 'تصاویر اضافی واریشن‌ها همگام شد.', array( 'product_id' => $parent_id ) );
 		}
 
 		return count( $touched );

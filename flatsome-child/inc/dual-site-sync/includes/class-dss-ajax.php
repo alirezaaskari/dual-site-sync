@@ -58,7 +58,7 @@ class DSS_Ajax {
 	public function handle_ping() {
 		check_ajax_referer( self::NONCE, 'nonce' );
 
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+		if ( ! current_user_can( DSS_Settings::CAPABILITY ) ) {
 			wp_send_json_error( 'دسترسی ندارید.' );
 		}
 

@@ -51,12 +51,37 @@ docs/
 ### ۱. چایلد تم
 
 پوشه‌ی `flatsome-child/` را در `wp-content/themes/` بگذارید و فعالش کنید.
-اگر از قبل چایلد تم دارید، فقط `inc/dual-site-sync/` را کپی کنید و این خط را به
+اگر از قبل چایلد تم دارید، فقط `inc/dual-site-sync/` را کپی کنید و این بلوک را به
 انتهای `functions.php` خودتان اضافه کنید:
 
 ```php
-require_once get_stylesheet_directory() . '/inc/dual-site-sync/bootstrap.php';
+$dss_bootstrap = get_stylesheet_directory() . '/inc/dual-site-sync/bootstrap.php';
+
+if ( file_exists( $dss_bootstrap ) ) {
+	require_once $dss_bootstrap;
+}
 ```
+
+از `require_once` بدون شرط استفاده نکنید: اگر مسیر اشتباه باشد یا فایل‌ها هنوز
+آپلود نشده باشند، `require_once` خام کل سایت را با Fatal error پایین می‌آورد و
+دسترسی به پیشخوان را هم از دست می‌دهید. با `file_exists` فقط ماژول لود نمی‌شود.
+
+پس از آپلود، ساختار باید دقیقاً این باشد (لینوکس به حروف کوچک/بزرگ حساس است):
+
+```
+wp-content/themes/flatsome-child/
+├── style.css
+├── functions.php
+└── inc/
+    └── dual-site-sync/
+        ├── bootstrap.php
+        ├── assets/
+        └── includes/
+```
+
+اگر بعد از extract یک لایه‌ی اضافه دیدید (مثلاً
+`flatsome-child/flatsome-child/inc/…`)، محتویات پوشه‌ی داخلی را یک سطح بالا
+بیاورید.
 
 ### ۲. تنظیمات wp-config.php
 

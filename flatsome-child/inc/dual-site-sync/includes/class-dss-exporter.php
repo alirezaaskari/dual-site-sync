@@ -93,7 +93,7 @@ class DSS_Exporter {
 			'source_url'  => get_permalink( $product_id ),
 			'source_edit' => get_edit_post_link( $product_id, 'raw' ),
 			'type'        => $product->get_type(),
-			'sku'         => $product->get_sku(),
+			'sku'         => (string) $product->get_sku( 'edit' ),
 			'flags'       => array(
 				'images'  => $with_images,
 				'content' => $with_content,
@@ -103,11 +103,11 @@ class DSS_Exporter {
 		);
 
 		// ---- فیلدهای همیشگی: قیمت و توضیح کوتاه ----
-		$payload['product']['regular_price']     = $product->get_regular_price();
-		$payload['product']['sale_price']        = $product->get_sale_price();
+		$payload['product']['regular_price']     = $product->get_regular_price( 'edit' );
+		$payload['product']['sale_price']        = $product->get_sale_price( 'edit' );
 		$payload['product']['date_on_sale_from'] = $product->get_date_on_sale_from() ? $product->get_date_on_sale_from()->getTimestamp() : null;
 		$payload['product']['date_on_sale_to']   = $product->get_date_on_sale_to() ? $product->get_date_on_sale_to()->getTimestamp() : null;
-		$payload['product']['short_description'] = $product->get_short_description();
+		$payload['product']['short_description'] = $product->get_short_description( 'edit' );
 
 		if ( 'stock' === $mode ) {
 			$payload['product'] = array();
@@ -115,26 +115,26 @@ class DSS_Exporter {
 
 		// ---- موجودی ----
 		if ( $with_stock ) {
-			$payload['product']['manage_stock']   = $product->get_manage_stock();
-			$payload['product']['stock_quantity'] = $product->get_stock_quantity();
-			$payload['product']['stock_status']   = $product->get_stock_status();
-			$payload['product']['backorders']     = $product->get_backorders();
+			$payload['product']['manage_stock']   = $product->get_manage_stock( 'edit' );
+			$payload['product']['stock_quantity'] = $product->get_stock_quantity( 'edit' );
+			$payload['product']['stock_status']   = $product->get_stock_status( 'edit' );
+			$payload['product']['backorders']     = $product->get_backorders( 'edit' );
 			$payload['product']['low_stock_amount'] = $product->get_low_stock_amount();
 		}
 
 		// ---- محتوا ----
 		if ( $with_content ) {
-			$payload['product']['name']               = $product->get_name();
-			$payload['product']['description']        = $product->get_description();
+			$payload['product']['name']               = $product->get_name( 'edit' );
+			$payload['product']['description']        = $product->get_description( 'edit' );
 			$payload['product']['menu_order']         = $product->get_menu_order();
 			$payload['product']['catalog_visibility'] = $product->get_catalog_visibility();
 			$payload['product']['featured']           = $product->get_featured();
 			$payload['product']['tax_status']         = $product->get_tax_status();
 			$payload['product']['tax_class']          = $product->get_tax_class();
-			$payload['product']['weight']             = $product->get_weight();
-			$payload['product']['length']             = $product->get_length();
-			$payload['product']['width']              = $product->get_width();
-			$payload['product']['height']             = $product->get_height();
+			$payload['product']['weight']             = $product->get_weight( 'edit' );
+			$payload['product']['length']             = $product->get_length( 'edit' );
+			$payload['product']['width']              = $product->get_width( 'edit' );
+			$payload['product']['height']             = $product->get_height( 'edit' );
 			$payload['product']['purchase_note']      = $product->get_purchase_note();
 
 			if ( DSS_Config::is_on( 'sync_status' ) || 'create' === $mode ) {
@@ -376,41 +376,55 @@ class DSS_Exporter {
 				continue;
 			}
 
+			/*
+			 * همه‌ی getter ها با context = 'edit' خوانده می‌شوند.
+			 *
+			 * WC_Product_Variation در حالت پیش‌فرض 'view' مقدار *والد* را به ارث
+			 * می‌دهد وقتی خود واریشن مقداری ندارد — برای sku، image_id، weight،
+			 * ابعاد، manage_stock، stock_quantity و backorders. خواندن با 'view'
+			 * یعنی آن مقدار ارث‌بری‌شده به‌عنوان داده‌ی واقعی به سایت مقابل منتقل و
+			 * آنجا به‌صورت مقدار حقیقی ذخیره شود؛ نتیجه‌اش SKU تکراری روی همه‌ی
+			 * واریشن‌ها و تصویر شاخص محصول روی تک‌تک آن‌هاست.
+			 * حالت 'edit' مقدار خام ذخیره‌شده را برمی‌گرداند، بدون ارث‌بری.
+			 */
 			$row = array(
 				'source_variation_id' => $variation_id,
-				'sku'                 => $variation->get_sku(),
+				'sku'                 => (string) $variation->get_sku( 'edit' ),
 				'attributes'          => $variation->get_variation_attributes(),
-				'regular_price'       => $variation->get_regular_price(),
-				'sale_price'          => $variation->get_sale_price(),
+				'regular_price'       => $variation->get_regular_price( 'edit' ),
+				'sale_price'          => $variation->get_sale_price( 'edit' ),
 			);
 
 			if ( 'stock' === $mode ) {
 				$row = array(
 					'source_variation_id' => $variation_id,
-					'sku'                 => $variation->get_sku(),
+					'sku'                 => (string) $variation->get_sku( 'edit' ),
 					'attributes'          => $variation->get_variation_attributes(),
 				);
 			}
 
 			if ( $with_stock ) {
-				$row['manage_stock']   = $variation->get_manage_stock();
-				$row['stock_quantity'] = $variation->get_stock_quantity();
-				$row['stock_status']   = $variation->get_stock_status();
-				$row['backorders']     = $variation->get_backorders();
+				$row['manage_stock']   = $variation->get_manage_stock( 'edit' );
+				$row['stock_quantity'] = $variation->get_stock_quantity( 'edit' );
+				$row['stock_status']   = $variation->get_stock_status( 'edit' );
+				$row['backorders']     = $variation->get_backorders( 'edit' );
 			}
 
 			if ( $with_content ) {
-				$row['status']      = $variation->get_status();
-				$row['description'] = $variation->get_description();
-				$row['menu_order']  = $variation->get_menu_order();
-				$row['weight']      = $variation->get_weight();
-				$row['length']      = $variation->get_length();
-				$row['width']       = $variation->get_width();
-				$row['height']      = $variation->get_height();
+				$row['status']      = $variation->get_status( 'edit' );
+				$row['description'] = $variation->get_description( 'edit' );
+				$row['menu_order']  = $variation->get_menu_order( 'edit' );
+				$row['weight']      = $variation->get_weight( 'edit' );
+				$row['length']      = $variation->get_length( 'edit' );
+				$row['width']       = $variation->get_width( 'edit' );
+				$row['height']      = $variation->get_height( 'edit' );
 			}
 
 			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) ) {
-				$row['image'] = DSS_Media::url( $variation->get_image_id() );
+				$image_id = $variation->get_image_id( 'edit' );
+
+				// کلید همیشه فرستاده می‌شود؛ رشته‌ی خالی یعنی «در مقصد هم پاک کن».
+				$row['image'] = $image_id ? DSS_Media::url( $image_id ) : '';
 
 				// تصاویر اضافی واریشن (افزونه‌ی Additional Variation Images و مشابه‌ها).
 				$extra = DSS_Variation_Gallery::export( $variation_id );

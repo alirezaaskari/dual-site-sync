@@ -656,9 +656,17 @@ class DSS_Importer {
 				$variation->set_attributes( self::normalize_variation_attributes( $var_attrs ) );
 			}
 
-			if ( '' !== $var_sku ) {
+			/*
+			 * SKU خالی هم اعمال می‌شود.
+			 *
+			 * مبدأ با context = 'edit' خوانده می‌شود، پس رشته‌ی خالی یعنی آن
+			 * واریشن واقعاً SKU ندارد و ووکامرس فقط در نمایش SKU والد را نشان
+			 * می‌دهد. مقصد هم باید همان‌طور باشد؛ در غیر این صورت SKU والد روی
+			 * همه‌ی واریشن‌ها به‌صورت مقدار حقیقی ذخیره می‌ماند.
+			 */
+			if ( array_key_exists( 'sku', $var_data ) ) {
 				try {
-					$variation->set_sku( wc_clean( $var_sku ) );
+					$variation->set_sku( '' === $var_sku ? '' : wc_clean( $var_sku ) );
 				} catch ( Exception $e ) {
 					DSS_Logger::warning( 'تنظیم SKU واریشن ناموفق بود.', array( 'sku' => $var_sku, 'error' => $e->getMessage() ) );
 				}
@@ -698,16 +706,21 @@ class DSS_Importer {
 			}
 
 			/*
-			 * تصویر واریشن فقط وقتی نوشته می‌شود که مبدأ واقعاً تصویری داشته باشد.
-			 * اگر واریشن مبدأ بدون تصویر بود، کلید image اصلاً در بسته نیست و
-			 * تصویر واریشن مقصد دست‌نخورده می‌ماند — هیچ‌وقت با تصویر شاخص یا
-			 * گالری محصول پر نمی‌شود.
+			 * تصویر واریشن دقیقاً آینه‌ی مبدأ می‌شود.
+			 *
+			 * رشته‌ی خالی یعنی واریشن مبدأ تصویر مخصوص خودش ندارد (ووکامرس در
+			 * نمایش تصویر شاخص محصول را نشان می‌دهد، ولی چیزی ذخیره نیست)، پس
+			 * تصویر مقصد هم پاک می‌شود.
 			 */
-			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) && ! empty( $var_data['image'] ) ) {
-				$attachment_id = DSS_Media::resolve( $var_data['image'], $parent_id );
+			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) && array_key_exists( 'image', $var_data ) ) {
+				if ( '' === $var_data['image'] || null === $var_data['image'] ) {
+					$variation->set_image_id( '' );
+				} else {
+					$attachment_id = DSS_Media::resolve( $var_data['image'], $parent_id );
 
-				if ( $attachment_id ) {
-					$variation->set_image_id( $attachment_id );
+					if ( $attachment_id ) {
+						$variation->set_image_id( $attachment_id );
+					}
 				}
 			}
 

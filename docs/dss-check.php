@@ -83,5 +83,66 @@ if ( is_dir( $inc ) ) {
 	echo "\n⚠️ پوشه‌ی inc/ در پوسته‌ی فعال وجود ندارد.\n";
 }
 
+/* ---------------------------------------------------------------------
+ * بازرسی تصاویر اضافی واریشن
+ *
+ * برای بررسی یک محصول:  dss-check.php?product=1234
+ * ------------------------------------------------------------------ */
+
+$product_id = isset( $_GET['product'] ) ? absint( $_GET['product'] ) : 0;
+
+if ( $product_id && class_exists( 'DSS_Variation_Gallery' ) ) {
+	echo str_repeat( '-', 78 ) . "\n";
+	echo "بازرسی تصاویر اضافی واریشن — محصول {$product_id}\n\n";
+
+	$active = DSS_Variation_Gallery::active_keys( true );
+
+	if ( empty( $active ) ) {
+		echo "هیچ افزونه‌ی «تصاویر اضافی واریشن» روی این سایت شناسایی نشد.\n";
+	} else {
+		echo 'کلیدهای فعال روی این سایت: ' . implode( ', ', array_keys( $active ) ) . "\n\n";
+	}
+
+	$product = wc_get_product( $product_id );
+
+	if ( ! $product ) {
+		echo "محصول پیدا نشد.\n";
+	} else {
+		foreach ( $product->get_children() as $variation_id ) {
+			$variation = wc_get_product( $variation_id );
+			$sku       = $variation ? $variation->get_sku() : '?';
+
+			echo "  واریشن #{$variation_id}  (SKU: {$sku})\n";
+			echo '    تصویر اصلی      : ' . ( $variation && $variation->get_image_id() ? $variation->get_image_id() : '— ندارد' ) . "\n";
+
+			foreach ( array_keys( DSS_Variation_Gallery::meta_keys() ) as $meta_key ) {
+				$exists = metadata_exists( 'post', $variation_id, $meta_key );
+				$value  = $exists ? get_post_meta( $variation_id, $meta_key, true ) : null;
+
+				if ( ! $exists ) {
+					continue;
+				}
+
+				$printable = is_array( $value ) ? implode( ',', $value ) : (string) $value;
+				$printable = '' === $printable ? '(خالی)' : $printable;
+
+				echo "    {$meta_key} = {$printable}\n";
+			}
+
+			if ( ! array_filter( array_keys( DSS_Variation_Gallery::meta_keys() ), function ( $k ) use ( $variation_id ) {
+				return metadata_exists( 'post', $variation_id, $k );
+			} ) ) {
+				echo "    تصاویر اضافی    : هیچ ردیف متایی وجود ندارد\n";
+			}
+
+			echo "\n";
+		}
+	}
+} elseif ( class_exists( 'DSS_Variation_Gallery' ) ) {
+	echo str_repeat( '-', 78 ) . "\n";
+	echo "برای بازرسی تصاویر اضافی واریشن، شناسه‌ی محصول را به آدرس اضافه کنید:\n";
+	echo "  dss-check.php?product=1234\n";
+}
+
 echo "\n⚠️ پس از رفع مشکل، این فایل را از سرور پاک کنید.\n";
 echo '</pre>';

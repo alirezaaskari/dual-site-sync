@@ -30,6 +30,7 @@ foreach ( array(
 	'class-dss-settings.php',
 	'class-dss-media.php',
 	'class-dss-swatches.php',
+	'class-dss-variation-gallery.php',
 	'class-dss-exporter.php',
 	'class-dss-importer.php',
 	'class-dss-client.php',

@@ -619,8 +619,9 @@ class DSS_Importer {
 			return 0;
 		}
 
-		$touched  = array();
-		$existing = $parent->get_children();
+		$touched              = array();
+		$existing             = $parent->get_children();
+		$extra_images_touched = false;
 
 		foreach ( $variations_data as $var_data ) {
 			$source_var_id = isset( $var_data['source_variation_id'] ) ? absint( $var_data['source_variation_id'] ) : 0;
@@ -714,6 +715,13 @@ class DSS_Importer {
 
 			$new_id = $variation->get_id();
 
+			// تصاویر اضافی واریشن.
+			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) && isset( $var_data['extra_images'] ) ) {
+				if ( DSS_Variation_Gallery::import( $new_id, $var_data['extra_images'], $parent_id ) ) {
+					$extra_images_touched = true;
+				}
+			}
+
 			if ( $source_var_id ) {
 				self::link( $new_id, $source_var_id, $source_site );
 			}
@@ -739,6 +747,10 @@ class DSS_Importer {
 					DSS_Logger::info( 'واریشن حذف شد (در سایت مبدأ وجود ندارد).', array( 'variation_id' => $old_id ) );
 				}
 			}
+		}
+
+		if ( $extra_images_touched ) {
+			DSS_Logger::info( 'تصاویر اضافی واریشن‌ها همگام شد.', array( 'product_id' => $parent_id ) );
 		}
 
 		return count( $touched );

@@ -411,6 +411,13 @@ class DSS_Exporter {
 
 			if ( $with_images && DSS_Config::is_on( 'sync_variation_images' ) ) {
 				$row['image'] = DSS_Media::url( $variation->get_image_id() );
+
+				// تصاویر اضافی واریشن (افزونه‌ی Additional Variation Images و مشابه‌ها).
+				$extra = DSS_Variation_Gallery::export( $variation_id );
+
+				if ( ! empty( $extra ) ) {
+					$row['extra_images'] = $extra;
+				}
 			}
 
 			$out[] = $row;

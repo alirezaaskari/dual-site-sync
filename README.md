@@ -39,7 +39,7 @@ flatsome-child/
 
 docs/
 ├── wp-config-snippet.php               بلوک تنظیمات wp-config.php
-└── lotus-sku-compat.php                نسخه‌ی سازگارشده‌ی مولد SKU اختصاصی
+└── customskufeatures.php               نسخه‌ی به‌روزشده‌ی مولد SKU اختصاصی شما
 ```
 
 ---
@@ -186,8 +186,8 @@ openssl rand -hex 32
 
 ## مولد SKU اختصاصی
 
-اگر مولد SKU خودتان را دارید (`lotus_auto_generate_sku`)، نسخه‌ی سازگارشده در
-`docs/lotus-sku-compat.php` است. جزئیات در همان فایل توضیح داده شده.
+اگر مولد SKU خودتان را دارید (`lotus_auto_generate_sku`)، نسخه‌ی به‌روزشده‌ی همان فایل در
+`docs/customskufeatures.php` است. جزئیات در همان فایل توضیح داده شده.
 
 خلاصه: DSS هنگام ساخت محصول در مقصد، SKU را **پیش از نخستین ذخیره** می‌نویسد، پس
 مولدهای مبتنی بر `save_post_product` خودشان کنار می‌کشند. برای اطمینان بیشتر،

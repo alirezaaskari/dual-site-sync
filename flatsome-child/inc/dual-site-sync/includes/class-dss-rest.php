@@ -11,6 +11,7 @@ class DSS_Rest {
 
 	const NAMESPACE_ = 'dss/v1';
 	const MAX_SKEW   = 300; // ثانیه
+	const MAX_STATE_ITEMS = 50;
 
 	private static $instance = null;
 
@@ -43,6 +44,16 @@ class DSS_Rest {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'handle_ping' ),
+				'permission_callback' => array( $this, 'verify_request' ),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE_,
+			'/product-state',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'handle_product_state' ),
 				'permission_callback' => array( $this, 'verify_request' ),
 			)
 		);
@@ -168,6 +179,129 @@ class DSS_Rest {
 			),
 			200
 		);
+	}
+
+	/**
+	 * وضعیت فعلی چند محصول را برمی‌گرداند — فقط خواندنی.
+	 *
+	 * تا پیش از این، افزونه فقط مسیر نوشتن داشت و سایت مبدأ هیچ راهی
+	 * نداشت بفهمد داده‌ی سایت مقابل با خودش می‌خواند یا نه. این مسیر
+	 * همان شکاف را پر می‌کند: قیمت و موجودی را برمی‌گرداند تا بشود
+	 * ناهماهنگی را تشخیص داد، بدون اینکه چیزی تغییر کند.
+	 *
+	 * بدنه‌ی درخواست:
+	 *   { "ids": [12, 34] }        شناسه‌های محلیِ سایت مقابل
+	 *   { "skus": ["0715"] }       یا بر اساس SKU
+	 *
+	 * حداکثر ۵۰ مورد در هر درخواست.
+	 *
+	 * @param WP_REST_Request $request درخواست.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_product_state( $request ) {
+		if ( ! function_exists( 'wc_get_product' ) ) {
+			return new WP_Error( 'dss_no_woocommerce', 'ووکامرس روی این سایت فعال نیست.', array( 'status' => 503 ) );
+		}
+
+		$payload = $request->get_json_params();
+
+		if ( ! is_array( $payload ) ) {
+			return new WP_Error( 'dss_bad_payload', 'بدنه‌ی درخواست JSON معتبر نیست.', array( 'status' => 400 ) );
+		}
+
+		$ids  = isset( $payload['ids'] ) && is_array( $payload['ids'] ) ? array_map( 'absint', $payload['ids'] ) : array();
+		$skus = isset( $payload['skus'] ) && is_array( $payload['skus'] ) ? array_map( 'sanitize_text_field', $payload['skus'] ) : array();
+
+		foreach ( $skus as $sku ) {
+			if ( '' === $sku ) {
+				continue;
+			}
+
+			$found = wc_get_product_id_by_sku( $sku );
+
+			if ( $found ) {
+				$ids[] = (int) $found;
+			}
+		}
+
+		$ids = array_slice( array_values( array_unique( array_filter( $ids ) ) ), 0, self::MAX_STATE_ITEMS );
+
+		if ( empty( $ids ) ) {
+			return new WP_REST_Response( array( 'products' => array() ), 200 );
+		}
+
+		$products = array();
+
+		foreach ( $ids as $product_id ) {
+			$product = wc_get_product( $product_id );
+
+			if ( ! $product ) {
+				continue;
+			}
+
+			$products[] = self::product_state( $product );
+		}
+
+		return new WP_REST_Response(
+			array(
+				'site'     => DSS_Config::current_key(),
+				'products' => $products,
+			),
+			200
+		);
+	}
+
+	/**
+	 * وضعیت یک محصول به شکلی که برای مقایسه کافی باشد.
+	 *
+	 * عمداً کوچک نگه داشته شده: فقط چیزهایی که ممکن است بین دو سایت
+	 * از هم دور بیفتند. توضیحات و تصاویر اینجا نمی‌آیند.
+	 *
+	 * @param WC_Product $product محصول.
+	 *
+	 * @return array
+	 */
+	private static function product_state( $product ) {
+		$state = array(
+			'id'             => $product->get_id(),
+			'sku'            => $product->get_sku(),
+			'name'           => $product->get_name(),
+			'type'           => $product->get_type(),
+			'status'         => $product->get_status(),
+			'regular_price'  => (string) $product->get_regular_price(),
+			'sale_price'     => (string) $product->get_sale_price(),
+			'stock_status'   => $product->get_stock_status(),
+			'manage_stock'   => (bool) $product->get_manage_stock(),
+			'stock_quantity' => $product->get_manage_stock() ? $product->get_stock_quantity() : null,
+			'modified'       => $product->get_date_modified() ? $product->get_date_modified()->date( 'Y-m-d H:i:s' ) : '',
+			'variations'     => array(),
+		);
+
+		if ( ! $product->is_type( 'variable' ) ) {
+			return $state;
+		}
+
+		foreach ( $product->get_children() as $variation_id ) {
+			$variation = wc_get_product( $variation_id );
+
+			if ( ! $variation ) {
+				continue;
+			}
+
+			$state['variations'][] = array(
+				'id'             => $variation->get_id(),
+				'sku'            => $variation->get_sku(),
+				'attributes'     => $variation->get_attributes(),
+				'regular_price'  => (string) $variation->get_regular_price(),
+				'sale_price'     => (string) $variation->get_sale_price(),
+				'stock_status'   => $variation->get_stock_status(),
+				'manage_stock'   => (bool) $variation->get_manage_stock(),
+				'stock_quantity' => $variation->get_manage_stock() ? $variation->get_stock_quantity() : null,
+			);
+		}
+
+		return $state;
 	}
 
 	/**

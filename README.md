@@ -23,6 +23,7 @@ flatsome-child/
     └── includes/
         ├── class-dss-config.php        ثابت‌های wp-config + تنظیمات پنل
         ├── class-dss-context.php       زمینه‌ی همگام‌سازی (scope یکتایی SKU)
+        ├── class-dss-cache.php          پاک کردن کش بعد از واردات
         ├── class-dss-logger.php        گزارش عملیات
         ├── class-dss-settings.php      صفحه‌ی تنظیمات و گزارش
         ├── class-dss-metabox.php       متاباکس صفحه‌ی محصول (قابل مخفی‌سازی)
@@ -317,6 +318,29 @@ add_filter( 'dss_variation_gallery_definitions', function ( $defs ) {
 پیوند روی **هر دو** سایت نوشته می‌شود؛ به همین دلیل دکمه‌ی «ایجاد» پس از موفقیت
 ناپدید می‌شود و امکان ساخت محصول تکراری از بین می‌رود. متاهای قدیمی
 `_source_id` / `_source_site` برای سازگاری همچنان خوانده و نوشته می‌شوند.
+
+---
+
+## پاک کردن کش بعد از واردات
+
+محصول در دیتابیس به‌روز می‌شود، ولی صفحه‌ای که مشتری می‌بیند از کش می‌آید — پس
+همگام‌سازی «انجام‌نشده» به نظر می‌رسد. بعد از هر واردات (ایجاد یا به‌روزرسانی)،
+کشِ **همان یک محصول** پاک می‌شود:
+
+- کش پست وردپرس و ترنزینت‌های ووکامرس (شامل بالا بردن نسخه‌ی ترنزینت‌ها)
+- LiteSpeed، WP Rocket، W3 Total Cache، WP Super Cache، WP Fastest Cache،
+  Cache Enabler، SG Optimizer، Breeze، Swift Performance، Nginx Helper
+
+هر کدام نصب باشد صدا زده می‌شود و بقیه بی‌صدا رد می‌شوند. کل کش سایت **پاک
+نمی‌شود** — این کار روی هر همگام‌سازی، سایت را برای دقایقی کند می‌کند.
+
+برای CDN یا هر لایه‌ی دیگر:
+
+```php
+add_action( 'dss_purge_cache', function ( $product_id ) {
+    my_cdn_purge( get_permalink( $product_id ) );
+} );
+```
 
 ---
 

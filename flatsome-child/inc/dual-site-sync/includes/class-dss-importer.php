@@ -337,7 +337,9 @@ class DSS_Importer {
 			WC_Product_Variable::sync( $product_id );
 		}
 
-		wc_delete_product_transients( $product_id );
+		// بدون این، محصول در دیتابیس به‌روز می‌شود ولی صفحه‌ای که مشتری
+		// می‌بیند از کش می‌آید و همگام‌سازی «انجام‌نشده» به نظر می‌رسد.
+		DSS_Cache::purge_product( $product_id );
 
 		if ( empty( $sections ) ) {
 			$sections[] = 'بدون تغییر قابل ذکر';

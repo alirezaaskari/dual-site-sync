@@ -27,6 +27,7 @@ foreach ( array(
 	'class-dss-logger.php',
 	'class-dss-config.php',
 	'class-dss-context.php',
+	'class-dss-cache.php',
 	'class-dss-settings.php',
 	'class-dss-media.php',
 	'class-dss-swatches.php',

@@ -14,6 +14,7 @@ class DSS_Client {
 
 	const ENDPOINT = '/wp-json/dss/v1/sync-product';
 	const PING     = '/wp-json/dss/v1/ping';
+	const STATE    = '/wp-json/dss/v1/product-state';
 
 	/**
 	 * ارسال بسته‌ی همگام‌سازی.
@@ -70,6 +71,71 @@ class DSS_Client {
 			'message' => isset( $data['message'] ) ? $data['message'] : '',
 			'id'      => isset( $data['id'] ) ? absint( $data['id'] ) : 0,
 		);
+	}
+
+	/**
+	 * خواندن وضعیت چند محصول از سایت مقابل — بدون تغییر دادن چیزی.
+	 *
+	 * برای تشخیص ناهماهنگی: قیمت و موجودی آن طرف را می‌گیرد تا بشود
+	 * با این طرف مقایسه کرد.
+	 *
+	 * @param int[]    $ids  شناسه‌های محصول در سایت مقابل.
+	 * @param string[] $skus یا SKU ها، اگر شناسه‌ی مقابل را نمی‌دانید.
+	 *
+	 * @return array{success:bool,message:string,products:array}
+	 */
+	public static function fetch_state( array $ids = array(), array $skus = array() ) {
+		$target = DSS_Config::target();
+
+		if ( ! $target ) {
+			return array( 'success' => false, 'message' => 'سایت مقابل پیکربندی نشده است.', 'products' => array() );
+		}
+
+		if ( empty( $ids ) && empty( $skus ) ) {
+			return array( 'success' => true, 'message' => '', 'products' => array() );
+		}
+
+		$response = self::request(
+			$target['url'] . self::STATE,
+			array(
+				'ids'  => array_values( array_map( 'absint', $ids ) ),
+				'skus' => array_values( $skus ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success'  => false,
+				'message'  => 'خطا در ارتباط با سایت مقابل: ' . $response->get_error_message(),
+				'products' => array(),
+			);
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = wp_remote_retrieve_body( $response );
+		$data = json_decode( $body, true );
+
+		if ( 200 !== $code ) {
+			$remote_message = is_array( $data ) && isset( $data['message'] )
+				? $data['message']
+				: wp_strip_all_tags( substr( $body, 0, 300 ) );
+
+			return array(
+				'success'  => false,
+				'message'  => sprintf( 'سایت مقابل خطا داد (کد %d): %s', $code, $remote_message ),
+				'products' => array(),
+			);
+		}
+
+		if ( ! is_array( $data ) || ! isset( $data['products'] ) ) {
+			return array(
+				'success'  => false,
+				'message'  => 'پاسخ سایت مقابل قابل خواندن نبود. شاید نسخه‌ی افزونه آنجا قدیمی است.',
+				'products' => array(),
+			);
+		}
+
+		return array( 'success' => true, 'message' => '', 'products' => $data['products'] );
 	}
 
 	/**

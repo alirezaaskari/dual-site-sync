@@ -27,6 +27,7 @@
  *   swatch-audit.php?status=publish فقط محصولات منتشرشده
  *   swatch-audit.php?stock=instock  فقط محصولات موجود
  *   swatch-audit.php?stock=outofstock فقط محصولات ناموجود
+ *   swatch-audit.php?single=1       محصولات تک‌رنگ هم نمایش داده شوند
  *   swatch-audit.php?format=text    خروجی ساده برای کپی کردن
  *   swatch-audit.php?csv=1          دانلود CSV
  *
@@ -245,20 +246,34 @@ if ( $check_taxonomies ) {
  * ۴. محاسبه‌ی مقدار مؤثر برای هر محصول
  * ================================================================== */
 
-$broken_products = array();   // product_id => ['issues'=>[...]]
+$broken_products = array();   // product_id => [issues]
 $term_impact     = array();   // term_id => تعداد محصول متأثر
+$hidden_single   = 0;         // محصولاتی که فقط به‌خاطر قانون تک‌رنگ پنهان شدند
+
+/*
+ * محصولی که در یک ویژگی فقط *یک* ترم دارد، سواچ معناداری نشان نمی‌دهد؛ خالی
+ * بودن رنگش هم در فروشگاه به چشم نمی‌آید. پس چنین ویژگی‌ای پنهان می‌شود مگر
+ * با ?single=1 صراحتاً خواسته شود. قانون در سطح *ویژگی* اعمال می‌شود، نه کل
+ * محصول: محصولی که دو رنگ و یک سایز دارد، همچنان برای ویژگی رنگ بررسی می‌شود.
+ */
+$include_single = ! empty( $_GET['single'] );
 
 foreach ( $assignments as $product_id => $term_ids ) {
 	$settings = isset( $product_settings[ $product_id ] ) ? $product_settings[ $product_id ] : array();
 	$issues   = array();
 
-	foreach ( array_unique( $term_ids ) as $term_id ) {
-		if ( ! isset( $term_info[ $term_id ] ) ) {
-			continue;
-		}
+	// گروه‌بندی ترم‌های این محصول بر اساس ویژگی، تا تعداد هر ویژگی مشخص شود.
+	$by_taxonomy = array();
 
-		$term     = $term_info[ $term_id ];
-		$taxonomy = $term['taxonomy'];
+	foreach ( array_unique( $term_ids ) as $term_id ) {
+		if ( isset( $term_info[ $term_id ] ) ) {
+			$by_taxonomy[ $term_info[ $term_id ]['taxonomy'] ][] = $term_id;
+		}
+	}
+
+	foreach ( $by_taxonomy as $taxonomy => $taxonomy_terms ) {
+	foreach ( $taxonomy_terms as $term_id ) {
+		$term = $term_info[ $term_id ];
 
 		$attribute_settings = swa_settings_for_attribute( $settings, $taxonomy );
 
@@ -293,17 +308,38 @@ foreach ( $assignments as $product_id => $term_ids ) {
 			'value'    => (string) $effective,
 			'reason'   => '' === trim( (string) $effective ) ? 'خالی' : 'نامعتبر',
 			'source'   => '' !== trim( $override ) ? 'تنظیم محصول' : 'متای ترم',
+			'siblings' => count( $taxonomy_terms ),
 		);
-
-		if ( ! isset( $term_impact[ $term_id ] ) ) {
-			$term_impact[ $term_id ] = 0;
-		}
-
-		$term_impact[ $term_id ]++;
+	}
 	}
 
-	if ( $issues ) {
-		$broken_products[ $product_id ] = $issues;
+	if ( ! $issues ) {
+		continue;
+	}
+
+	// اعمال قانون تک‌رنگ.
+	$visible = array();
+
+	foreach ( $issues as $issue ) {
+		if ( $include_single || $issue['siblings'] > 1 ) {
+			$visible[] = $issue;
+		}
+	}
+
+	if ( ! $visible ) {
+		$hidden_single++;
+		continue;
+	}
+
+	$broken_products[ $product_id ] = $visible;
+
+	// اثر هر ترم فقط از روی مشکلات نمایش‌داده‌شده شمرده می‌شود.
+	foreach ( $visible as $issue ) {
+		if ( ! isset( $term_impact[ $issue['term_id'] ] ) ) {
+			$term_impact[ $issue['term_id'] ] = 0;
+		}
+
+		$term_impact[ $issue['term_id'] ]++;
 	}
 }
 
@@ -424,6 +460,10 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 		$stock_counts['onbackorder']
 	);
 
+	if ( $hidden_single ) {
+		printf( "%d محصول تک‌رنگ نادیده گرفته شد (با single=1 نمایش داده می‌شوند)\n\n", $hidden_single );
+	}
+
 	echo "ترم‌های مقصر (به ترتیب تعداد محصول متأثر)\n";
 	echo str_repeat( '=', 70 ) . "\n";
 
@@ -506,6 +546,10 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 		.stock.back    { background: #fcf9e8; color: #8a6d0b; border: 1px solid #ecd98a; }
 		.stock.unknown { background: #f0f0f1; color: #646970; border: 1px solid #dcdcde; }
 		.stock-summary { float: left; font-weight: 400; }
+		.skipped { background: #f6f7f7; border-right: 4px solid #8c8f94; padding: 12px 18px;
+			border-radius: 6px; margin-bottom: 20px; font-size: 13px; color: #50575e; }
+		.skipped a { color: #2271b1; }
+		.single { background: #f0f0f1; color: #646970; padding: 1px 7px; border-radius: 3px; font-size: 11px; }
 		.stock-summary .stock { margin-right: 6px; }
 		.note { color: #646970; font-size: 13px; margin-top: 24px; padding: 14px 18px;
 			background: #fcf9e8; border-right: 4px solid #dba617; border-radius: 6px; }
@@ -539,9 +583,20 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 		<a href="?status=publish">فقط منتشرشده</a>
 		<a href="<?php echo esc_url( add_query_arg( 'stock', 'instock' ) ); ?>">فقط موجود</a>
 		<a href="<?php echo esc_url( add_query_arg( 'stock', 'outofstock' ) ); ?>">فقط ناموجود</a>
+		<a href="<?php echo esc_url( add_query_arg( 'single', $include_single ? '0' : '1' ) ); ?>">
+			<?php echo $include_single ? 'پنهان کردن تک‌رنگ‌ها' : 'نمایش تک‌رنگ‌ها'; ?>
+		</a>
 		<a href="?format=text<?php echo $status_filter ? '&status=' . esc_attr( $status_filter ) : ''; ?>">خروجی متنی</a>
 		<a href="?csv=1<?php echo $status_filter ? '&status=' . esc_attr( $status_filter ) : ''; ?>">دانلود CSV</a>
 	</div>
+
+	<?php if ( $hidden_single && ! $include_single ) : ?>
+		<div class="skipped">
+			<?php printf( '%d محصول تک‌رنگ نادیده گرفته شد', (int) $hidden_single ); ?> —
+			محصولی که در یک ویژگی فقط یک ترم دارد سواچ معناداری نشان نمی‌دهد.
+			<a href="<?php echo esc_url( add_query_arg( 'single', '1' ) ); ?>">به‌هرحال نشانم بده</a>
+		</div>
+	<?php endif; ?>
 
 	<?php if ( $total_terms ) : ?>
 		<div class="tip">
@@ -626,6 +681,9 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 											<code><?php echo esc_html( $issue['value'] ); ?></code>
 										<?php endif; ?>
 										<span class="src">(<?php echo esc_html( $issue['source'] ); ?>)</span>
+										<?php if ( 1 === (int) $issue['siblings'] ) : ?>
+											<span class="single">تک‌رنگ</span>
+										<?php endif; ?>
 									</li>
 								<?php endforeach; ?>
 							</ul>

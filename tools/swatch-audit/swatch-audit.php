@@ -25,6 +25,8 @@
  *
  *   swatch-audit.php                گزارش کامل
  *   swatch-audit.php?status=publish فقط محصولات منتشرشده
+ *   swatch-audit.php?stock=instock  فقط محصولات موجود
+ *   swatch-audit.php?stock=outofstock فقط محصولات ناموجود
  *   swatch-audit.php?format=text    خروجی ساده برای کپی کردن
  *   swatch-audit.php?csv=1          دانلود CSV
  *
@@ -60,6 +62,32 @@ function swa_is_valid_color( $value ) {
 	$value = trim( (string) $value );
 
 	return '' !== $value && (bool) sanitize_hex_color( $value );
+}
+
+/**
+ * برچسب فارسی وضعیت موجودی ووکامرس.
+ *
+ * برای محصول متغیر، ووکامرس خودش _stock_status والد را بر اساس واریشن‌ها
+ * همگام نگه می‌دارد، پس خواندن همین متا برای هر دو نوع محصول درست است.
+ *
+ * @param string $status مقدار متای _stock_status.
+ *
+ * @return array{label:string,class:string}
+ */
+function swa_stock_label( $status ) {
+	switch ( $status ) {
+		case 'instock':
+			return array( 'label' => 'موجود', 'class' => 'in' );
+
+		case 'outofstock':
+			return array( 'label' => 'ناموجود', 'class' => 'out' );
+
+		case 'onbackorder':
+			return array( 'label' => 'پیش‌سفارش', 'class' => 'back' );
+
+		default:
+			return array( 'label' => '—', 'class' => 'unknown' );
+	}
 }
 
 /**
@@ -283,7 +311,8 @@ foreach ( $assignments as $product_id => $term_ids ) {
  * ۵. اطلاعات محصولات متأثر — یک کوئری
  * ================================================================== */
 
-$products = array();
+$products     = array();
+$stock_filter = isset( $_GET['stock'] ) ? sanitize_key( wp_unslash( $_GET['stock'] ) ) : '';
 
 if ( $broken_products ) {
 	$ids = array_map( 'intval', array_keys( $broken_products ) );
@@ -291,9 +320,12 @@ if ( $broken_products ) {
 
 	$rows = $wpdb->get_results(
 		$wpdb->prepare(
-			"SELECT p.ID, p.post_title, p.post_status, pm.meta_value AS sku
+			"SELECT p.ID, p.post_title, p.post_status,
+			        pm.meta_value AS sku,
+			        sm.meta_value AS stock_status
 			 FROM {$wpdb->posts} p
 			 LEFT JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = '_sku'
+			 LEFT JOIN {$wpdb->postmeta} sm ON sm.post_id = p.ID AND sm.meta_key = '_stock_status'
 			 WHERE p.ID IN ({$ph})
 			 ORDER BY p.post_title ASC", // phpcs:ignore WordPress.DB.PreparedSQL
 			$ids
@@ -301,13 +333,35 @@ if ( $broken_products ) {
 	);
 
 	foreach ( $rows as $row ) {
+		$stock = (string) $row->stock_status;
+
+		if ( $stock_filter && $stock_filter !== $stock ) {
+			continue;
+		}
+
 		$products[] = array(
 			'id'     => (int) $row->ID,
 			'title'  => $row->post_title,
 			'sku'    => (string) $row->sku,
 			'status' => $row->post_status,
+			'stock'  => $stock,
 			'issues' => $broken_products[ (int) $row->ID ],
 		);
+	}
+}
+
+// شمارش وضعیت موجودی، پیش از اعمال فیلتر نمایش.
+$stock_counts = array( 'instock' => 0, 'outofstock' => 0, 'onbackorder' => 0, 'unknown' => 0 );
+
+if ( $broken_products && isset( $rows ) ) {
+	foreach ( $rows as $row ) {
+		$key = (string) $row->stock_status;
+
+		if ( ! isset( $stock_counts[ $key ] ) ) {
+			$key = 'unknown';
+		}
+
+		$stock_counts[ $key ]++;
 	}
 }
 
@@ -327,7 +381,7 @@ if ( ! empty( $_GET['csv'] ) ) {
 	$out = fopen( 'php://output', 'w' );
 	fprintf( $out, chr( 0xEF ) . chr( 0xBB ) . chr( 0xBF ) ); // BOM برای اکسل
 
-	fputcsv( $out, array( 'شناسه محصول', 'نام محصول', 'SKU', 'وضعیت', 'ویژگی', 'ترم', 'نامک ترم', 'مشکل', 'منبع', 'لینک ویرایش' ) );
+	fputcsv( $out, array( 'شناسه محصول', 'نام محصول', 'SKU', 'وضعیت انتشار', 'موجودی', 'ویژگی', 'ترم', 'نامک ترم', 'مشکل', 'منبع', 'لینک ویرایش' ) );
 
 	foreach ( $products as $product ) {
 		foreach ( $product['issues'] as $issue ) {
@@ -338,6 +392,7 @@ if ( ! empty( $_GET['csv'] ) ) {
 					$product['title'],
 					$product['sku'],
 					$product['status'],
+					swa_stock_label( $product['stock'] )['label'],
 					$issue['label'],
 					$issue['name'],
 					$issue['slug'],
@@ -360,7 +415,14 @@ if ( ! empty( $_GET['csv'] ) ) {
 if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 	header( 'Content-Type: text/plain; charset=utf-8' );
 
-	printf( "%d محصول با سواچ رنگ ناقص، ناشی از %d ترم\n\n", $total_products, $total_terms );
+	printf(
+		"%d محصول با سواچ رنگ ناقص، ناشی از %d ترم\n(%d موجود، %d ناموجود، %d پیش‌سفارش)\n\n",
+		$total_products,
+		$total_terms,
+		$stock_counts['instock'],
+		$stock_counts['outofstock'],
+		$stock_counts['onbackorder']
+	);
 
 	echo "ترم‌های مقصر (به ترتیب تعداد محصول متأثر)\n";
 	echo str_repeat( '=', 70 ) . "\n";
@@ -382,11 +444,12 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 
 	foreach ( $products as $product ) {
 		printf(
-			"\n#%d  %s%s  [%s]\n  %s\n",
+			"\n#%d  %s%s  [%s / %s]\n  %s\n",
 			$product['id'],
 			$product['title'],
 			$product['sku'] ? '  (SKU: ' . $product['sku'] . ')' : '',
 			$product['status'],
+			swa_stock_label( $product['stock'] )['label'],
 			admin_url( 'post.php?post=' . $product['id'] . '&action=edit' )
 		);
 
@@ -437,6 +500,13 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 		.reason-invalid { color: #bd8600; font-weight: 700; }
 		.src { color: #646970; font-size: 11px; }
 		.impact { font-weight: 700; color: #d63638; }
+		.stock { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+		.stock.in      { background: #edfaef; color: #00734c; border: 1px solid #b8e6c4; }
+		.stock.out     { background: #fcf0f1; color: #b32d2e; border: 1px solid #f0bcbd; }
+		.stock.back    { background: #fcf9e8; color: #8a6d0b; border: 1px solid #ecd98a; }
+		.stock.unknown { background: #f0f0f1; color: #646970; border: 1px solid #dcdcde; }
+		.stock-summary { float: left; font-weight: 400; }
+		.stock-summary .stock { margin-right: 6px; }
 		.note { color: #646970; font-size: 13px; margin-top: 24px; padding: 14px 18px;
 			background: #fcf9e8; border-right: 4px solid #dba617; border-radius: 6px; }
 		.tip { background: #f0f6fc; border-right: 4px solid #2271b1; padding: 14px 18px;
@@ -452,6 +522,13 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 	<div class="summary <?php echo $total_products ? 'bad' : 'ok'; ?>">
 		<?php if ( $total_products ) : ?>
 			<?php printf( '%d محصول متأثر است، ناشی از %d ترم.', (int) $total_products, (int) $total_terms ); ?>
+			<span class="stock-summary">
+				<span class="stock in">موجود: <?php echo (int) $stock_counts['instock']; ?></span>
+				<span class="stock out">ناموجود: <?php echo (int) $stock_counts['outofstock']; ?></span>
+				<?php if ( $stock_counts['onbackorder'] ) : ?>
+					<span class="stock back">پیش‌سفارش: <?php echo (int) $stock_counts['onbackorder']; ?></span>
+				<?php endif; ?>
+			</span>
 		<?php else : ?>
 			هیچ محصولی با سواچ رنگ ناقص پیدا نشد.
 		<?php endif; ?>
@@ -460,6 +537,8 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 	<div class="filters">
 		<a href="?">همه‌ی وضعیت‌ها</a>
 		<a href="?status=publish">فقط منتشرشده</a>
+		<a href="<?php echo esc_url( add_query_arg( 'stock', 'instock' ) ); ?>">فقط موجود</a>
+		<a href="<?php echo esc_url( add_query_arg( 'stock', 'outofstock' ) ); ?>">فقط ناموجود</a>
 		<a href="?format=text<?php echo $status_filter ? '&status=' . esc_attr( $status_filter ) : ''; ?>">خروجی متنی</a>
 		<a href="?csv=1<?php echo $status_filter ? '&status=' . esc_attr( $status_filter ) : ''; ?>">دانلود CSV</a>
 	</div>
@@ -514,6 +593,7 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 						<th style="width:70px;">شناسه</th>
 						<th>محصول</th>
 						<th style="width:110px;">SKU</th>
+						<th style="width:95px;">موجودی</th>
 						<th>ترم‌های بدون رنگ</th>
 						<th style="width:160px;"></th>
 					</tr>
@@ -529,6 +609,10 @@ if ( isset( $_GET['format'] ) && 'text' === $_GET['format'] ) {
 							<?php endif; ?>
 						</td>
 						<td><?php echo $product['sku'] ? '<code>' . esc_html( $product['sku'] ) . '</code>' : '—'; ?></td>
+						<td>
+							<?php $stock = swa_stock_label( $product['stock'] ); ?>
+							<span class="stock <?php echo esc_attr( $stock['class'] ); ?>"><?php echo esc_html( $stock['label'] ); ?></span>
+						</td>
 						<td>
 							<ul class="issues">
 								<?php foreach ( $product['issues'] as $issue ) : ?>

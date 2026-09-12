@@ -109,3 +109,29 @@
 .dss-log--error   td:nth-child(2) { color: #d63638; font-weight: 600; }
 .dss-log--warning td:nth-child(2) { color: #bd8600; font-weight: 600; }
 .dss-log--success td:nth-child(2) { color: #00734c; font-weight: 600; }
+
+/* مقایسه قیمت */
+
+.dss-progress { margin: 14px 0; max-width: 520px; }
+.dss-progress__bar { height: 10px; background: #dcdcde; border-radius: 5px; overflow: hidden; }
+.dss-progress__bar span { display: block; height: 100%; width: 0; background: #2271b1; transition: width .2s ease; }
+.dss-progress__text { margin-top: 6px; font-size: 12px; color: #646970; }
+
+.dss-price-table td { vertical-align: top; }
+.dss-price-table tr.dss-missing td { background: #fffafa; }
+
+.dss-pname { font-weight: 700; }
+.dss-badge { background: #f0f0f1; color: #646970; padding: 1px 7px; border-radius: 3px; font-size: 11px; }
+
+ul.dss-issues { margin: 0; padding: 0; list-style: none; }
+ul.dss-issues li { padding: 3px 0; border-bottom: 1px dashed #f0f0f1; font-size: 13px; }
+ul.dss-issues li:last-child { border-bottom: none; }
+
+.dss-var { color: #50575e; }
+.dss-cmp { display: block; margin-top: 2px; font-size: 12px; color: #646970; }
+.dss-arrow { color: #a7aaad; margin: 0 4px; }
+.dss-money { font-weight: 700; color: #1d2327; background: #f6f7f7; padding: 1px 6px; border-radius: 3px; }
+.dss-none { color: #a7aaad; font-style: italic; }
+
+.dss-price-empty { margin-top: 20px; padding: 14px 18px; background: #f0f8f1;
+	border-right: 4px solid #00a32a; border-radius: 6px; }

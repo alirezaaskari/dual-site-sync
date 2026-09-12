@@ -38,6 +38,7 @@ foreach ( array(
 	'class-dss-rest.php',
 	'class-dss-ajax.php',
 	'class-dss-metabox.php',
+	'class-dss-price-compare.php',
 	'class-dss-search.php',
 	'class-dss-stock.php',
 	'class-dss-variation-sku.php',
@@ -66,6 +67,7 @@ function dss_init_modules() {
 
 	DSS_Settings::instance();
 	DSS_Metabox::instance();
+	DSS_Price_Compare::instance();
 	DSS_Ajax::instance();
 	DSS_Rest::instance();
 	DSS_Search::instance();

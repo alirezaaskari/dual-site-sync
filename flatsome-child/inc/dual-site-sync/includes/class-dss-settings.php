@@ -257,6 +257,10 @@ class DSS_Settings {
 				<div class="notice notice-success is-dismissible"><p>تنظیمات ذخیره شد.</p></div>
 			<?php endif; ?>
 
+			<p>
+				<a class="button" href="<?php echo esc_url( DSS_Price_Compare::url() ); ?>">مقایسه قیمت دو سایت ↗</a>
+			</p>
+
 			<h2>وضعیت اتصال</h2>
 			<table class="widefat striped dss-status-table">
 				<tbody>

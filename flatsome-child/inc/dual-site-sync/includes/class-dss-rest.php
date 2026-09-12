@@ -225,10 +225,22 @@ class DSS_Rest {
 			}
 		}
 
-		$ids = array_slice( array_values( array_unique( array_filter( $ids ) ) ), 0, self::MAX_STATE_ITEMS );
+		$ids       = array_values( array_unique( array_filter( $ids ) ) );
+		$requested = count( $ids );
+		$ids       = array_slice( $ids, 0, self::MAX_STATE_ITEMS );
+
+		/*
+		 * اگر درخواست از سقف بیشتر بود، صراحتاً اعلام می‌شود. بدون این پرچم،
+		 * فرستنده محصولات بریده‌شده را «پیدا نشد» تفسیر می‌کند و گزارش پر از
+		 * هشدار جعلی می‌شود.
+		 */
+		$truncated = $requested > count( $ids );
 
 		if ( empty( $ids ) ) {
-			return new WP_REST_Response( array( 'products' => array() ), 200 );
+			return new WP_REST_Response(
+				array( 'products' => array(), 'truncated' => false, 'max_items' => self::MAX_STATE_ITEMS ),
+				200
+			);
 		}
 
 		$products = array();
@@ -245,8 +257,10 @@ class DSS_Rest {
 
 		return new WP_REST_Response(
 			array(
-				'site'     => DSS_Config::current_key(),
-				'products' => $products,
+				'site'      => DSS_Config::current_key(),
+				'products'  => $products,
+				'truncated' => $truncated,
+				'max_items' => self::MAX_STATE_ITEMS,
 			),
 			200
 		);
@@ -265,12 +279,15 @@ class DSS_Rest {
 	private static function product_state( $product ) {
 		$state = array(
 			'id'             => $product->get_id(),
-			'sku'            => $product->get_sku(),
+			'sku'            => (string) $product->get_sku( 'edit' ),
 			'name'           => $product->get_name(),
 			'type'           => $product->get_type(),
 			'status'         => $product->get_status(),
-			'regular_price'  => (string) $product->get_regular_price(),
-			'sale_price'     => (string) $product->get_sale_price(),
+			'currency'       => get_woocommerce_currency(),
+			'permalink'      => get_permalink( $product->get_id() ),
+			'edit_link'      => admin_url( 'post.php?post=' . $product->get_id() . '&action=edit' ),
+			'regular_price'  => (string) $product->get_regular_price( 'edit' ),
+			'sale_price'     => (string) $product->get_sale_price( 'edit' ),
 			'stock_status'   => $product->get_stock_status(),
 			'manage_stock'   => (bool) $product->get_manage_stock(),
 			'stock_quantity' => $product->get_manage_stock() ? $product->get_stock_quantity() : null,
@@ -291,10 +308,11 @@ class DSS_Rest {
 
 			$state['variations'][] = array(
 				'id'             => $variation->get_id(),
-				'sku'            => $variation->get_sku(),
+				// context 'edit' لازم است؛ در حالت view، واریشنِ بدون SKU مقدار والد را برمی‌گرداند.
+				'sku'            => (string) $variation->get_sku( 'edit' ),
 				'attributes'     => $variation->get_attributes(),
-				'regular_price'  => (string) $variation->get_regular_price(),
-				'sale_price'     => (string) $variation->get_sale_price(),
+				'regular_price'  => (string) $variation->get_regular_price( 'edit' ),
+				'sale_price'     => (string) $variation->get_sale_price( 'edit' ),
 				'stock_status'   => $variation->get_stock_status(),
 				'manage_stock'   => (bool) $variation->get_manage_stock(),
 				'stock_quantity' => $variation->get_manage_stock() ? $variation->get_stock_quantity() : null,

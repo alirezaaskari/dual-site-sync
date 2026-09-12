@@ -135,7 +135,13 @@ class DSS_Client {
 			);
 		}
 
-		return array( 'success' => true, 'message' => '', 'products' => $data['products'] );
+		return array(
+			'success'   => true,
+			'message'   => '',
+			'products'  => $data['products'],
+			'truncated' => ! empty( $data['truncated'] ),
+			'max_items' => isset( $data['max_items'] ) ? (int) $data['max_items'] : 0,
+		);
 	}
 
 	/**

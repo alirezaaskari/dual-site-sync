@@ -12,7 +12,7 @@ class DSS_Exporter {
 	/**
 	 * حالت‌های مجاز.
 	 */
-	const MODES = array( 'create', 'full', 'full_no_images', 'partial', 'stock' );
+	const MODES = array( 'create', 'full', 'full_no_price', 'full_no_images', 'partial', 'stock' );
 
 	/**
 	 * آیا این حالت تصاویر را منتقل می‌کند؟
@@ -22,7 +22,22 @@ class DSS_Exporter {
 	 * @return bool
 	 */
 	public static function mode_includes_images( $mode ) {
-		return in_array( $mode, array( 'create', 'full', 'partial' ), true );
+		return in_array( $mode, array( 'create', 'full', 'full_no_price', 'partial' ), true );
+	}
+
+	/**
+	 * آیا این حالت قیمت را منتقل می‌کند؟
+	 *
+	 * حالت «بدون قیمت» کلیدهای قیمت را در بسته *نمی‌گذارد* — نه اینکه
+	 * خالی بفرستد. وارد‌کننده با array_key_exists کار می‌کند، پس کلیدِ
+	 * نبوده یعنی «دست نزن»، و قیمتِ سایت مقابل همان می‌ماند که بود.
+	 *
+	 * @param string $mode حالت.
+	 *
+	 * @return bool
+	 */
+	public static function mode_includes_price( $mode ) {
+		return ! in_array( $mode, array( 'full_no_price', 'stock' ), true );
 	}
 
 	/**
@@ -33,7 +48,7 @@ class DSS_Exporter {
 	 * @return bool
 	 */
 	public static function mode_includes_content( $mode ) {
-		return in_array( $mode, array( 'create', 'full', 'full_no_images' ), true );
+		return in_array( $mode, array( 'create', 'full', 'full_no_price', 'full_no_images' ), true );
 	}
 
 	/**
@@ -62,6 +77,7 @@ class DSS_Exporter {
 		$labels = array(
 			'create'         => 'ایجاد محصول',
 			'full'           => 'همگام‌سازی کامل',
+			'full_no_price'  => 'همگام‌سازی بدون قیمت',
 			'full_no_images' => 'همگام‌سازی بدون تصاویر',
 			'partial'        => 'به‌روزرسانی جزئی',
 			'stock'          => 'همگام‌سازی موجودی',
@@ -83,6 +99,7 @@ class DSS_Exporter {
 		$with_images    = self::mode_includes_images( $mode );
 		$with_content   = self::mode_includes_content( $mode );
 		$with_stock     = self::mode_includes_stock( $mode );
+		$with_price     = self::mode_includes_price( $mode );
 		$is_variable    = $product->is_type( 'variable' );
 
 		$payload = array(
@@ -98,15 +115,19 @@ class DSS_Exporter {
 				'images'  => $with_images,
 				'content' => $with_content,
 				'stock'   => $with_stock,
+				'price'   => $with_price,
 			),
 			'product'     => array(),
 		);
 
-		// ---- فیلدهای همیشگی: قیمت و توضیح کوتاه ----
-		$payload['product']['regular_price']     = $product->get_regular_price( 'edit' );
-		$payload['product']['sale_price']        = $product->get_sale_price( 'edit' );
-		$payload['product']['date_on_sale_from'] = $product->get_date_on_sale_from() ? $product->get_date_on_sale_from()->getTimestamp() : null;
-		$payload['product']['date_on_sale_to']   = $product->get_date_on_sale_to() ? $product->get_date_on_sale_to()->getTimestamp() : null;
+		// ---- قیمت (در حالت «بدون قیمت» هیچ کلیدی گذاشته نمی‌شود) ----
+		if ( $with_price ) {
+			$payload['product']['regular_price']     = $product->get_regular_price( 'edit' );
+			$payload['product']['sale_price']        = $product->get_sale_price( 'edit' );
+			$payload['product']['date_on_sale_from'] = $product->get_date_on_sale_from() ? $product->get_date_on_sale_from()->getTimestamp() : null;
+			$payload['product']['date_on_sale_to']   = $product->get_date_on_sale_to() ? $product->get_date_on_sale_to()->getTimestamp() : null;
+		}
+
 		$payload['product']['short_description'] = $product->get_short_description( 'edit' );
 
 		if ( 'stock' === $mode ) {
@@ -367,6 +388,7 @@ class DSS_Exporter {
 		$with_images  = self::mode_includes_images( $mode );
 		$with_content = self::mode_includes_content( $mode );
 		$with_stock   = self::mode_includes_stock( $mode );
+		$with_price   = self::mode_includes_price( $mode );
 		$out          = array();
 
 		foreach ( $product->get_children() as $variation_id ) {
@@ -391,16 +413,11 @@ class DSS_Exporter {
 				'source_variation_id' => $variation_id,
 				'sku'                 => (string) $variation->get_sku( 'edit' ),
 				'attributes'          => $variation->get_variation_attributes(),
-				'regular_price'       => $variation->get_regular_price( 'edit' ),
-				'sale_price'          => $variation->get_sale_price( 'edit' ),
 			);
 
-			if ( 'stock' === $mode ) {
-				$row = array(
-					'source_variation_id' => $variation_id,
-					'sku'                 => (string) $variation->get_sku( 'edit' ),
-					'attributes'          => $variation->get_variation_attributes(),
-				);
+			if ( $with_price ) {
+				$row['regular_price'] = $variation->get_regular_price( 'edit' );
+				$row['sale_price']    = $variation->get_sale_price( 'edit' );
 			}
 
 			if ( $with_stock ) {

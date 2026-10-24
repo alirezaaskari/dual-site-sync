@@ -201,5 +201,53 @@ line('قیمتِ وریشن هم نیست',
 line('ولی موجودیِ وریشن هست',
      array_key_exists('stock_status', $vst['variations'][0]));
 
+/* ============================================================ */
+echo "\n########## ۵) «کامل» یعنی همه چیز — با تنظیماتِ پیش‌فرض ##########\n";
+/*
+ * صاحب فروشگاه: «اگر همگام‌سازی کامل را زدم، همه چیزی که در سایت اول
+ * هست به‌روز شود — مثل قبل.» تنظیماتِ «موجودی» و «وضعیتِ انتشار»
+ * پیش‌فرض خاموش‌اند، و با آن‌ها «کامل» موجودی و وضعیت را نمی‌برد.
+ * این بخش با همان پیش‌فرض‌ها اجرا می‌شود.
+ */
+DSS_Config::$on['sync_stock_fields'] = false;
+DSS_Config::$on['shared_inventory']  = false;
+DSS_Config::$on['sync_status']       = false;
+
+$PRODUCTS[20]['stock_status']   = 'outofstock';
+$PRODUCTS[20]['manage_stock']   = true;
+$PRODUCTS[20]['stock_quantity'] = 0;
+
+foreach (['full' => 'کامل', 'full_no_price' => 'بدون قیمت'] as $mode => $fa) {
+    $b = DSS_Exporter::build(wc_get_product(20), $mode);
+    line("$fa: موجودی می‌رود", ($b['product']['stock_status'] ?? '') === 'outofstock',
+         '→ ' . ($b['product']['stock_status'] ?? '—'));
+    line("$fa: تعداد هم می‌رود", array_key_exists('stock_quantity', $b['product']));
+    line("$fa: وضعیتِ انتشار می‌رود", ($b['product']['status'] ?? '') === 'publish');
+    line("$fa: پرچمِ موجودی روشن است", ($b['flags']['stock'] ?? null) === true);
+
+    $v = DSS_Exporter::build(wc_get_product(10), $mode);
+    line("$fa: موجودیِ وریشن می‌رود",
+         array_key_exists('stock_status', $v['variations'][0]));
+}
+
+echo "\n  حالت‌های دیگر هنوز به تنظیم گوش می‌دهند:\n";
+foreach (['full_no_images' => 'بدون تصاویر', 'partial' => 'جزئی'] as $mode => $fa) {
+    $b = DSS_Exporter::build(wc_get_product(20), $mode);
+    line("$fa: موجودی نمی‌رود", !array_key_exists('stock_status', $b['product']));
+    line("$fa: وضعیت نمی‌رود", !array_key_exists('status', $b['product']));
+}
+
+DSS_Config::$on['sync_status'] = true;
+$b = DSS_Exporter::build(wc_get_product(20), 'full_no_images');
+line('با روشن کردنِ تنظیم، «بدون تصاویر» هم وضعیت می‌برد',
+     array_key_exists('status', $b['product']));
+DSS_Config::$on['sync_status'] = false;
+
+$b = DSS_Exporter::build(wc_get_product(20), 'stock');
+line('«موجودی» همان است: فقط موجودی',
+     array_key_exists('stock_status', $b['product'])
+     && !array_key_exists('status', $b['product'])
+     && !array_key_exists('name', $b['product']));
+
 printf("\n  نتیجه: %d پاس، %d شکست\n", $pass, $fail);
 exit($fail === 0 ? 0 : 1);

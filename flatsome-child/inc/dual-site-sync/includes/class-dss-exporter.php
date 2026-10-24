@@ -59,11 +59,42 @@ class DSS_Exporter {
 	 * @return bool
 	 */
 	public static function mode_includes_stock( $mode ) {
-		if ( 'stock' === $mode ) {
+		if ( 'stock' === $mode || self::mode_is_complete( $mode ) ) {
 			return true;
 		}
 
 		return DSS_Config::is_on( 'sync_stock_fields' ) || DSS_Config::is_on( 'shared_inventory' );
+	}
+
+	/**
+	 * آیا این حالت «همه چیز» است؟
+	 *
+	 * صاحب فروشگاه: «اگر همگام‌سازی کامل را زدم، همه چیزی که در سایت
+	 * اول هست به‌روز شود — مثل قبل.» نسخه‌ی تک‌فایلیِ قبلی موجودی را
+	 * در «کامل» می‌برد؛ بازنویسی آن را پشتِ تنظیمی با پیش‌فرضِ خاموش
+	 * برد، و «کامل» دیگر کامل نبود.
+	 *
+	 * پس این دو حالت موجودی و وضعیتِ انتشار را همیشه می‌برند، و
+	 * «بدون قیمت» همان «کامل» است منهای قیمت. آن تنظیم‌ها هنوز برای
+	 * حالت‌های دیگر — مثلاً همگام‌سازیِ خودکار — معتبرند.
+	 *
+	 * @param string $mode حالت.
+	 *
+	 * @return bool
+	 */
+	public static function mode_is_complete( $mode ) {
+		return in_array( $mode, array( 'full', 'full_no_price' ), true );
+	}
+
+	/**
+	 * آیا این حالت وضعیتِ انتشار (منتشرشده/پیش‌نویس) را منتقل می‌کند؟
+	 *
+	 * @param string $mode حالت.
+	 *
+	 * @return bool
+	 */
+	public static function mode_includes_status( $mode ) {
+		return 'create' === $mode || self::mode_is_complete( $mode ) || DSS_Config::is_on( 'sync_status' );
 	}
 
 	/**
@@ -158,7 +189,7 @@ class DSS_Exporter {
 			$payload['product']['height']             = $product->get_height( 'edit' );
 			$payload['product']['purchase_note']      = $product->get_purchase_note();
 
-			if ( DSS_Config::is_on( 'sync_status' ) || 'create' === $mode ) {
+			if ( self::mode_includes_status( $mode ) ) {
 				$payload['product']['status'] = $product->get_status();
 			}
 

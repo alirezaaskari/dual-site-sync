@@ -94,7 +94,7 @@ class DSS_Stock {
 	 * @param string $mode       حالت.
 	 */
 	private static function enqueue( $product_id, $mode ) {
-		$weight = array( 'stock' => 1, 'partial' => 2, 'full_no_images' => 3, 'full' => 4 );
+		$weight = array( 'stock' => 1, 'partial' => 2, 'full_no_images' => 3, 'full_no_price' => 4, 'full' => 5 );
 
 		$product_id = absint( $product_id );
 

@@ -133,12 +133,8 @@ class DSS_Metabox {
 					همگام‌سازی کامل
 				</button>
 
-				<button type="button" class="button dss-btn" data-mode="full_no_images" data-product="<?php echo esc_attr( $product_id ); ?>">
-					همگام‌سازی بدون تصاویر
-				</button>
-
-				<button type="button" class="button dss-btn" data-mode="partial" data-product="<?php echo esc_attr( $product_id ); ?>">
-					به‌روزرسانی جزئی
+				<button type="button" class="button dss-btn" data-mode="full_no_price" data-product="<?php echo esc_attr( $product_id ); ?>">
+					همگام‌سازی بدون قیمت
 				</button>
 
 				<?php if ( ! $is_linked ) : ?>
